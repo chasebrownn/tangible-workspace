@@ -1,0 +1,243 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+pragma solidity ^0.8.7;
+
+import "../abstract/PriceConverter.sol";
+import "../interfaces/ICurrencyFeed.sol";
+
+import "../abstract/AdminAccess.sol";
+import "../interfaces/IPriceOracleV2.sol";
+import "../interfaces/IChainlinkRWAOracle.sol";
+
+contract RealtyOracleTangible is AdminAccess, IPriceOracleV2, PriceConverter {
+
+    ICurrencyFeed public currencyFeed;
+
+    constructor() {
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+    }
+
+    /// @dev The function latest price from oracle.
+    uint8 public decimals = 3;
+
+    /// @dev The function latest price from oracle.
+    string public description = "Real estate Oracle";
+
+    /// @dev The function latest price from oracle.
+    uint256 public version = 4;
+
+    function convertGBPToUSD(uint256 priceInGBP)
+        internal
+        view
+        returns (uint256)
+    {
+        AggregatorV3Interface priceFeedGBP = currencyFeed.currencyPriceFeeds(
+            oracleCurrency
+        );
+        (, int256 price, , , ) = priceFeedGBP.latestRoundData();
+        if (price < 0) {
+            price = 0;
+        }
+        //add conversion premium
+        uint256 GBPToUSD = uint256(price) +
+            currencyFeed.conversionPremiums(oracleCurrency);
+        return (priceInGBP * GBPToUSD) / 10**uint256(priceFeedGBP.decimals());
+    }
+
+    function usdcPrice(
+        ITangibleNFT nft,
+        IERC20Metadata paymentUSDToken,
+        uint256 fingerprint,
+        uint256 tokenId
+    )
+        external
+        view
+        override
+        returns (
+            uint256 weSellAt,
+            uint256 weSellAtStock,
+            uint256 weBuyAt,
+            uint256 weBuyAtStock,
+            uint256 lockedAmount
+        )
+    {
+        require(
+            (address(nft) != address(0) && tokenId != 0) || (fingerprint != 0),
+            "Must provide fingerpeint or tokenId"
+        );
+        uint256 localFingerprint = fingerprint;
+
+        if (localFingerprint == 0) {
+            localFingerprint = nft.tokensFingerprint(tokenId);
+        }
+
+        require(localFingerprint != 0, "fingerprint must exist");
+
+        lockedAmount = convertPriceToUSDCustom(
+            paymentUSDToken,
+            convertGBPToUSD(additionals[localFingerprint]),
+            decimals
+        );
+
+        weSellAt = convertPriceToUSDCustom(
+            paymentUSDToken,
+            convertGBPToUSD(oraclePrices[localFingerprint].weSellAt),
+            decimals
+        );
+        weBuyAt = convertPriceToUSDCustom(
+            paymentUSDToken,
+            convertGBPToUSD(oraclePrices[localFingerprint].weBuyAt),
+            decimals
+        );
+
+        weSellAtStock = oraclePrices[localFingerprint].weSellAtStock;
+        weBuyAtStock = oraclePrices[localFingerprint].weBuyAtStock;
+
+        return (weSellAt, weSellAtStock, weBuyAt, weBuyAtStock, lockedAmount);
+    }
+
+    //set decimals
+    function setDecimals(uint8 _decimals) external onlyAdmin {
+        emit DecimalsUpdated(decimals, _decimals);
+        decimals = _decimals;
+    }
+
+    function marketPriceNativeCurrency(uint256 fingerprint)
+        public
+        view
+        returns (uint256 nativePrice, string memory currency)
+    {
+        currency = oracleCurrency;
+        nativePrice =
+            oraclePrices[fingerprint].weSellAt +
+            additionals[fingerprint];
+    }
+
+    function setCurrencyFeed(address _currencyFeed) external onlyAdmin {
+        currencyFeed = ICurrencyFeed(_currencyFeed);
+    }
+
+// second part
+
+    struct OraclePrices {
+        uint256 weSellAt;
+        uint256 weSellAtStock;
+    }
+
+    struct OracleData {
+        uint256 fingerprint;
+        uint256 weSellAt;
+        uint256 weSellAtStock;
+    }
+
+    // mapping(uint256 => OraclePrices) internal oraclePrices;
+    // mapping(uint256 => uint256) internal additionals;
+    // mapping(uint256 => uint256) internal fingerprintTimestamps;
+    uint256[] public fingerprintsInOracle; //list of fingerprints that have prices
+    function fingerprintsInOracle( uint256 index){
+
+    }
+    mapping(uint256 => bool) public fingerprintHasPrice;
+    string public oracleCurrency;
+    uint256 public latestPrices;
+
+    function latestTimeStamp(uint256 fingerprint)
+        external
+        view
+        override
+        returns (uint256)
+    {
+        return fingerprintTimestamps[fingerprint];
+    }
+
+    function oracleDataAll()
+        public
+        view
+        returns (
+            OracleData[] memory currentData,
+            uint256[] memory currentAdditionals
+        )
+    {
+        uint256 length = fingerprintsInOracle.length;
+        currentData = new OracleData[](length);
+        currentAdditionals = new uint256[](length);
+
+        for (uint256 i = 0; i < length; i++) {
+            currentData[i].weSellAt = oraclePrices[fingerprintsInOracle[i]]
+                .weSellAt;
+            currentData[i].weSellAtStock = oraclePrices[fingerprintsInOracle[i]]
+                .weSellAtStock;
+            currentData[i].weBuyAt = oraclePrices[fingerprintsInOracle[i]]
+                .weBuyAt;
+            currentData[i].weBuyAtStock = oraclePrices[fingerprintsInOracle[i]]
+                .weBuyAtStock;
+            currentData[i].fingerprint = fingerprintsInOracle[i];
+            currentAdditionals[i] = additionals[fingerprintsInOracle[i]];
+        }
+    }
+
+    function oracleDataBatch(uint256[] calldata fingerprints)
+        public
+        view
+        returns (
+            OracleData[] memory currentData,
+            uint256[] memory currentAdditionals
+        )
+    {
+        uint256 length = fingerprints.length;
+        currentData = new OracleData[](length);
+        currentAdditionals = new uint256[](length);
+
+        for (uint256 i = 0; i < length; i++) {
+            currentData[i].weSellAt = oraclePrices[fingerprints[i]].weSellAt;
+            currentData[i].weSellAtStock = oraclePrices[fingerprints[i]]
+                .weSellAtStock;
+            currentData[i].weBuyAt = oraclePrices[fingerprints[i]].weBuyAt;
+            currentData[i].weBuyAtStock = oraclePrices[fingerprints[i]]
+                .weBuyAtStock;
+            currentData[i].fingerprint = fingerprints[i];
+            currentAdditionals[i] = additionals[fingerprints[i]];
+        }
+    }
+
+    function decrementSellStock(uint256 fingerprint)
+        external
+        override
+        onlyFactory
+    {
+        require(
+            oraclePrices[fingerprint].weSellAtStock > 0,
+            "Already zero sell"
+        );
+        oraclePrices[fingerprint].weSellAtStock--;
+    }
+
+    //to be called by Instant liquidity engine
+    function decrementBuyStock(uint256 fingerprint)
+        external
+        override
+        onlyFactory
+    {
+        require(oraclePrices[fingerprint].weBuyAtStock > 0, "Already zero buy");
+        oraclePrices[fingerprint].weBuyAtStock--;
+    }
+
+    function availableInStock(uint256 fingerprint)
+        external
+        view
+        override
+        returns (uint256 weSellAtStock, uint256 weBuyAtStock)
+    {
+        return (
+            oraclePrices[fingerprint].weSellAtStock,
+            oraclePrices[fingerprint].weBuyAtStock
+        );
+    }
+
+    function getFingerprints() external view returns (uint256[] memory) {
+        return fingerprintsInOracle;
+    }
+}
+
+contract RealtyOracleTangible is PriceConverter {
+
+}
