@@ -41,35 +41,35 @@ contract Factory is IFactory, IOwnable {
         LAST
     }
     //for revenue share
-    bytes32 public constant CLAIMER_ROLE = keccak256("CLAIMER");
-    bytes32 public constant DEPOSITOR_ROLE = keccak256("DEPOSITOR");
-    bytes32 public constant SHARE_MANAGER_ROLE = keccak256("SHARE_MANAGER");
+    bytes32 public constant CLAIMER_ROLE = keccak256("CLAIMER"); // 32
+    bytes32 public constant DEPOSITOR_ROLE = keccak256("DEPOSITOR"); // 32
+    bytes32 public constant SHARE_MANAGER_ROLE = keccak256("SHARE_MANAGER"); // 32
     //for piNFT
-    bytes32 public constant REVENUE_MANAGER_ROLE = keccak256("REVENUE_MANAGER");
+    bytes32 public constant REVENUE_MANAGER_ROLE = keccak256("REVENUE_MANAGER"); // 32
 
-    address internal _contractOwner;
-    address internal _newContractOwner;
+    address internal _contractOwner; // 20
+    address internal _newContractOwner; // 20
 
     //USDC contract address, necessary for revenueShare contract
-    IERC20 public immutable override USDC;
+    IERC20 public immutable override USDC; // 20
     //default USD contract - token used for buying unminted and paying storage
-    IERC20 public override defUSD;
-    address public instantLiquidity;
+    IERC20 public override defUSD; // 20
+    address public instantLiquidity; // 20
     //passive income data
-    RevenueShare public override revenueShare;
-    RentShare public override rentShare;
-    IERC20 public override TNGBL;
-    PassiveIncomeNFT public override passiveNft;
+    RevenueShare public override revenueShare; // 20
+    RentShare public override rentShare; // 20
+    IERC20 public override TNGBL; // 20
+    PassiveIncomeNFT public override passiveNft; // 20
 
-    address public override feeStorageAddress;
-    address public override marketplace;
-    address public override deployer;
-    address public fractionsDeployer;
-    address public storageDeployer;
+    address public override feeStorageAddress; // 20
+    address public override marketplace; // 20
+    address public override deployer; // 20
+    address public fractionsDeployer; // 20
+    address public storageDeployer; // 20
 
-    address public override tangibleDao;
+    address public override tangibleDao; // 20
 
-    address public override initReSeller;
+    address public override initReSeller; // 20
 
     mapping(IERC20 => bool) public paymentTokens;
 

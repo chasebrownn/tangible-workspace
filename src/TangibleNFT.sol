@@ -5,12 +5,12 @@ import "./interfaces/ITangibleNFT.sol";
 import "./interfaces/IFactory.sol";
 import "./interfaces/IOwnable.sol";
 import "./abstract/AdminAccess.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import {ERC721Pausable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Pausable.sol";
-import {ERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
-import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
-import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Pausable.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 
 contract TangibleNFT is
     AdminAccess,
@@ -46,14 +46,14 @@ contract TangibleNFT is
     mapping(uint256 => bool) public tnftCustody;
 
     // lockpercentage is 100% - 10000 50% - 5000
-    uint256 public override lockPercent;
-    bool public immutable override paysRent;
-    uint256 public override storagePricePerYear;
-    uint256 public override storagePercentagePricePerYear; //max percent precision is 2 decimals 100% is 10000 0.01% is 1
-    bool public override storagePriceFixed;
-    bool public override storageRequired;
-    address public factory;
-    uint256 public immutable deploymentBlock;
+    uint256 public override lockPercent; //256 bits
+    bool public immutable override paysRent; //8 bits
+    uint256 public override storagePricePerYear; // 256 bits
+    uint256 public override storagePercentagePricePerYear; //256 bits    //max percent precision is 2 decimals 100% is 10000 0.01% is 1
+    bool public override storagePriceFixed; //8 bits
+    bool public override storageRequired; // 8 bits
+    address public factory; //160 bits
+    uint256 public immutable deploymentBlock; // 256 bits 5 slots
 
     //passive income nfts book keeping
     mapping(uint256 => uint256) public override tnftToPassiveNft;
@@ -273,7 +273,6 @@ contract TangibleNFT is
     }
 
     //passive income logic end
-
     /// @inheritdoc ITangibleNFT
     function setTNFTStatuses(
         uint256[] calldata tokenIds,
