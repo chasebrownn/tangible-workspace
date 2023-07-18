@@ -175,19 +175,19 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         baseUri = newUri;
     }
 
-    function _isTokenMinter(address from, uint256 tokenId) internal view returns (bool) {
-        if (_originalTokenOwners[tokenId] == from) {
-            return true;
-        }
-        return false;
-    }
+    // function _isTokenMinter(address from, uint256 tokenId) internal view returns (bool) {
+    //     if (_originalTokenOwners[tokenId] == from) {
+    //         return true;
+    //     }
+    //     return false;
+    // }
 
 
     // ~ Internal Functions ERC1155 ~
 
     /// @notice Internal fucntion to check conditions prior to initiating a transfer of token(s).
-    function _beforeTokenTransfer(address from, address to, uint256 tokenId) internal override(ERC1155) {
-        super._beforeTokenTransfer(from, to, tokenId);
+    function _beforeTokenTransfer(address operator, address from, address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data) internal override(ERC1155) {
+        super._beforeTokenTransfer(operator, from, to, ids, amounts, data);
         // Allow operations if admin, factory or 0 address
         if (
             IFactory(factory).isFactoryAdmin(from) ||
@@ -198,10 +198,11 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
             return;
         }
 
+        // TODO: Rebuild section
         // we prevent transfers if blacklisted or not in our custody(redeemed)
-        if (blackListedTokens[tokenId] || !tnftCustody[tokenId]) {
-            revert("BL");
-        }
+        // if (blackListedTokens[tokenId] || !tnftCustody[tokenId]) {
+        //     revert("BL");
+        // }
         // for houses there is no storage so just allow transfer
         // if (!storageRequired) {
         //     return;
