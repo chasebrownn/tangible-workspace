@@ -139,7 +139,8 @@ contract Factory is IFactory, IOwnable {
     constructor(
         address _usdc,
         address _feeStorageAddress,
-        address _priceManager
+        address _priceManager,
+        address _owner
     ) {
         require(_usdc != address(0), "UZ");
 
@@ -150,7 +151,7 @@ contract Factory is IFactory, IOwnable {
         feeStorageAddress = _feeStorageAddress;
         priceManager = ITangiblePriceManager(_priceManager);
 
-        _contractOwner = msg.sender;
+        _contractOwner = _owner;
 
         emit OwnershipPushed(address(0), _contractOwner);
     }

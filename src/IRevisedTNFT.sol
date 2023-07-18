@@ -8,7 +8,7 @@ interface IRevisedTNFT is IERC1155{
     // event StoragePricePerYearSet(uint256 oldPrice, uint256 newPrice);
     // event StoragePercentagePricePerYearSet(uint256 oldPercentage, uint256 newPercentage);
     // event StorageFeeToPay(uint256 indexed tokenId, uint256 _years, uint256 amount);
-    event ProducedTNFTs(uint256[] tokenId);
+    event ProducedTNFT(uint256 indexed tokenId);
 
     // function baseURI() external view returns (string memory);
 

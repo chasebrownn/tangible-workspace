@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.7;
 
+// TODO: Specify imports
 import "./IRevisedTNFT.sol";
 import "./interfaces/IFactory.sol";
 import "./interfaces/IOwnable.sol";
 import "./abstract/AdminAccess.sol";
 
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
+import "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 
 contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
@@ -25,6 +27,9 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
     mapping(uint256 => uint256) public override tokensFingerprint;
     mapping(uint256 => bool) public tnftCustody;
 
+    string[] public productIds;
+    uint256[] public fingeprintsInTnft;
+
     uint256 constant public MAX_BALANCE = 100;
 
 
@@ -35,6 +40,8 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         string memory _symbol,
         string memory _uri
     ) ERC1155(_uri) {
+
+        _grantRole(FACTORY_ROLE, _factory);
 
         factory = _factory;
         category = _category;
@@ -64,11 +71,43 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         return operator == factory || ERC1155.isApprovedForAll(account, operator);
     }
 
+    /**
+        @dev Handles the receipt of a single ERC1155 token type. This function is called at the end of a `safeTransferFrom` after the balance has been updated.
+        To accept the transfer, this must return `bytes4(keccak256("onERC1155Received(address,address,uint256,uint256,bytes)"))`
+        (i.e. 0xf23a6e61, or its own function selector).
+        @param operator The address which initiated the transfer (i.e. msg.sender)
+        @param from The address which previously owned the token
+        @param id The ID of the token being transferred
+        @param value The amount of tokens being transferred
+        @param data Additional data with no specified format
+        @return `bytes4(keccak256("onERC1155Received(address,address,uint256,uint256,bytes)"))` if transfer is allowed
+    */
+    function onERC1155Received(address, address, uint256, uint256, bytes calldata) external pure returns (bytes4) {
+        return IERC1155Receiver.onERC1155Received.selector;
+    }
+
+    /**
+        @dev Handles the receipt of a multiple ERC1155 token types. This function
+        is called at the end of a `safeBatchTransferFrom` after the balances have
+        been updated. To accept the transfer(s), this must return
+        `bytes4(keccak256("onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)"))`
+        (i.e. 0xbc197c81, or its own function selector).
+        @param operator The address which initiated the batch transfer (i.e. msg.sender)
+        @param from The address which previously owned the token
+        @param ids An array containing ids of each token being transferred (order and length must match values array)
+        @param values An array containing amounts of each token being transferred (order and length must match ids array)
+        @param data Additional data with no specified format
+        @return `bytes4(keccak256("onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)"))` if transfer is allowed
+     */
+    function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata) external returns (bytes4) {
+        return IERC1155Receiver.onERC1155Received.selector;
+    }
+
 
     // ~ Factory Functions ~
 
     /// @notice mints multiple TNFTs.
-    function produceMultipleTNFTtoStock( uint256 count, uint256 fingerprint, address toStock) external override onlyFactory returns (uint256[] memory) {
+    function produceMultipleTNFTtoStock(uint256 count, uint256 fingerprint, address toStock) external override onlyFactory returns (uint256[] memory) {
         require(bytes(fingerprintToProductId[fingerprint]).length > 0, "FNA");
         uint256[] memory mintedTnfts = new uint256[](count);
 
@@ -79,7 +118,6 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
             }
         }
 
-        emit ProducedTNFTs(mintedTnfts);
         return mintedTnfts;
     }
 
@@ -98,6 +136,27 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         factory = _factory;
     }
 
+    /// @notice This function will push a new set of fingerprints and ids to the global productIds and fingerprints arrays.
+    function addFingerprintsIds(uint256[] calldata fingerprints, string[] calldata ids) external onlyFactoryAdmin {
+        require(fingerprints.length == ids.length, "no match");
+        require(fingerprints.length > 0, "cannot be empty");
+
+        uint256 lengthArray = fingerprints.length;
+        uint256 i = 0;
+
+        while (i < lengthArray) {
+            require(bytes(fingerprintToProductId[fingerprints[i]]).length == 0, "FAA");
+            fingerprintToProductId[fingerprints[i]] = ids[i];
+
+            productIds.push(ids[i]);
+            fingeprintsInTnft.push(fingerprints[i]);
+
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
 
     // ~ Internal Functions ~
 
@@ -108,6 +167,8 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         _mint(toStock, tokenToMint, MAX_BALANCE, abi.encodePacked(fingerprint));
 
         tokensFingerprint[tokenToMint] = fingerprint;
+
+        emit ProducedTNFT(tokenToMint);
         return tokenToMint;
     }
 
