@@ -170,11 +170,45 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         return tokenToMint;
     }
 
+    /// @notice Internal function for updating the baseUri global variable.
+    function _setURI(string memory newUri) internal virtual override(ERC1155) {
+        baseUri = newUri;
+    }
+
+    function _isTokenMinter(address from, uint256 tokenId) internal view returns (bool) {
+        if (_originalTokenOwners[tokenId] == from) {
+            return true;
+        }
+        return false;
+    }
+
 
     // ~ Internal Functions ERC1155 ~
 
-    function _setURI(string memory newUri) internal virtual override(ERC1155) {
-        baseUri = newUri;
+    /// @notice Internal fucntion to check conditions prior to initiating a transfer of token(s).
+    function _beforeTokenTransfer(address from, address to, uint256 tokenId) internal override(ERC1155) {
+        super._beforeTokenTransfer(from, to, tokenId);
+        // Allow operations if admin, factory or 0 address
+        if (
+            IFactory(factory).isFactoryAdmin(from) ||
+            (factory == from) ||
+            from == address(0) ||
+            to == address(0)
+        ) {
+            return;
+        }
+
+        // we prevent transfers if blacklisted or not in our custody(redeemed)
+        if (blackListedTokens[tokenId] || !tnftCustody[tokenId]) {
+            revert("BL");
+        }
+        // for houses there is no storage so just allow transfer
+        // if (!storageRequired) {
+        //     return;
+        // }
+        // if (!_isStorageFeePaid(tokenId) && !_isTokenMinter(from, tokenId)) {
+        //     revert("CT");
+        // }
     }
 
 
