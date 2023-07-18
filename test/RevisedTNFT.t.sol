@@ -67,6 +67,7 @@ contract RevisedTNFTTest is Test {
 
     // ~ Unit Tests ~
 
+    /// @notice Initial state test.
     function test_tangible_revisedTNFT_init_state() public {
         assertEq(tNftContract.factory(), address(factory));
         assertEq(tNftContract.category(), "Tangible NFT");
@@ -75,7 +76,30 @@ contract RevisedTNFTTest is Test {
         assertEq(tNftContract.lastTokenId(), 0);
     }
 
-    function test_tangible_revisedTNFT_produceMultipleTNFTtoStock_one() public {
+    /// @notice This method tests the produceMultipleTNFTtoStock() function with a single token.
+    function test_tangible_revisedTNFT_produceMultipleTNFTtoStock() public {
+
+        uint256[] memory fingerprints = new uint256[](1);
+        string[] memory ids = new string[](1);
+
+        fingerprints[0] = 42;
+        ids[0] = "id_42";
+
+        vm.prank(FACTORY_OWNER);
+        tNftContract.addFingerprintsIds(fingerprints, ids);
+        
+        assertEq(tNftContract.fingerprintToProductId(42), "id_42");
+        assertEq(tNftContract.balanceOf(address(this), 1), 0);
+
+        vm.prank(tNftContract.factory());
+        tNftContract.produceMultipleTNFTtoStock(1, 42, address(this));
+
+        assertEq(tNftContract.balanceOf(address(this), 1), 100);
+        assertEq(tNftContract.tokensFingerprint(1), 42);
+    }
+
+    /// @notice This method tests the produceMultipleTNFTtoStock() function with multiple tokens of the same fingerprint.
+    function test_tangible_revisedTNFT_produceMultipleTNFTtoStock_multiple() public {
 
         uint256[] memory fingerprints = new uint256[](1);
         string[] memory ids = new string[](1);
@@ -86,12 +110,23 @@ contract RevisedTNFTTest is Test {
         vm.prank(FACTORY_OWNER);
         tNftContract.addFingerprintsIds(fingerprints, ids);
 
+        assertEq(tNftContract.fingerprintToProductId(42), "id_42");
         assertEq(tNftContract.balanceOf(address(this), 1), 0);
+        assertEq(tNftContract.balanceOf(address(this), 2), 0);
+        assertEq(tNftContract.balanceOf(address(this), 3), 0);
+        assertEq(tNftContract.balanceOf(address(this), 4), 0);
 
         vm.prank(tNftContract.factory());
-        tNftContract.produceMultipleTNFTtoStock(1, 42, address(this));
+        tNftContract.produceMultipleTNFTtoStock(4, 42, address(this));
 
         assertEq(tNftContract.balanceOf(address(this), 1), 100);
+        assertEq(tNftContract.tokensFingerprint(1), 42);
+        assertEq(tNftContract.balanceOf(address(this), 2), 100);
+        assertEq(tNftContract.tokensFingerprint(2), 42);
+        assertEq(tNftContract.balanceOf(address(this), 3), 100);
+        assertEq(tNftContract.tokensFingerprint(3), 42);
+        assertEq(tNftContract.balanceOf(address(this), 4), 100);
+        assertEq(tNftContract.tokensFingerprint(4), 42);
     }
 
 }

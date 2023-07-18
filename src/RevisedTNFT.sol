@@ -47,7 +47,6 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         category = _category;
         symbol = _symbol;
         baseUri = _uri;
-        
     }
 
 
@@ -82,7 +81,7 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         @param data Additional data with no specified format
         @return `bytes4(keccak256("onERC1155Received(address,address,uint256,uint256,bytes)"))` if transfer is allowed
     */
-    function onERC1155Received(address, address, uint256, uint256, bytes calldata) external pure returns (bytes4) {
+    function onERC1155Received(address operator, address from, uint256 id, uint256 value, bytes calldata data) external pure returns (bytes4) {
         return IERC1155Receiver.onERC1155Received.selector;
     }
 
@@ -99,7 +98,7 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         @param data Additional data with no specified format
         @return `bytes4(keccak256("onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)"))` if transfer is allowed
      */
-    function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata) external returns (bytes4) {
+    function onERC1155BatchReceived(address operator, address from, uint256[] calldata ids, uint256[] calldata values, bytes calldata data) external returns (bytes4) {
         return IERC1155Receiver.onERC1155Received.selector;
     }
 
@@ -138,13 +137,12 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
 
     /// @notice This function will push a new set of fingerprints and ids to the global productIds and fingerprints arrays.
     function addFingerprintsIds(uint256[] calldata fingerprints, string[] calldata ids) external onlyFactoryAdmin {
-        require(fingerprints.length == ids.length, "no match");
-        require(fingerprints.length > 0, "cannot be empty");
-
         uint256 lengthArray = fingerprints.length;
-        uint256 i = 0;
 
-        while (i < lengthArray) {
+        require(lengthArray == ids.length, "no match");
+        require(lengthArray > 0, "arr cannot be empty");
+
+        for (uint i; i < lengthArray;) {
             require(bytes(fingerprintToProductId[fingerprints[i]]).length == 0, "FAA");
             fingerprintToProductId[fingerprints[i]] = ids[i];
 
