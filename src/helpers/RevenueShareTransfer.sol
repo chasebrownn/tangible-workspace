@@ -4,12 +4,8 @@ pragma solidity ^0.8.7;
 import "../interfaces/IFactory.sol";
 
 library RevenueShareTransfer {
-    function burnShare(
-        RevenueShare shareContract,
-        bool condition,
-        address contractAddress,
-        uint256 tokenId
-    ) internal returns (uint256) {
+
+    function burnShare(RevenueShare shareContract, bool condition, address contractAddress, uint256 tokenId) internal returns (uint256) {
         if (!condition) return 0;
         return
             transferShare(

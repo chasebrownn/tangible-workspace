@@ -8,6 +8,9 @@ import { RevisedTangibleNFT } from "../src/RevisedTNFT.sol";
 import { Factory } from "../src/protocol/Factory.sol";
 
 
+// TODO: Test burn
+
+
 contract RevisedTNFTTest is Test {
     RevisedTangibleNFT public tNftContract;
     Factory public factory;

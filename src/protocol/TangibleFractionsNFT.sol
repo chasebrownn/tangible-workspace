@@ -199,10 +199,8 @@ contract TangibleFractionsNFT is
         );
     }
 
-    function _burnShareHelper(address who, uint256 tokenId)
-        internal
-        returns (uint256 revShare)
-    {
+    function _burnShareHelper(address who, uint256 tokenId) internal returns (uint256 revShare) {
+
         revShare = revenueShare.burnShare(_updateRevenueShare, who, tokenId);
         rentShare.burnShare(_updateRentShare, who, tokenId);
     }
@@ -216,43 +214,26 @@ contract TangibleFractionsNFT is
         }
     }
 
-    function claimFor(address contractAddress, uint256 tokenId)
-        external
-        override
-        onlyFactory
-    {
+    function claimFor(address contractAddress, uint256 tokenId) external override onlyFactory {
         //claim rent, revenue
         _claim(contractAddress, tokenId);
         //claim tngbl
         _claimTngbl(ownerOf(tokenId), tokenId, claimableIncome(tokenId));
     }
 
-    function initialSplit(
-        address owner,
-        address _tnft,
-        uint256 _tnftTokenId,
-        uint256 keepShare,
-        uint256 sellShare
-    )
-        external
-        override
-        onlyFactory
-        returns (uint256 tokenKeep, uint256 tokenSell)
-    {
-        require(
-            (address(tnft) == _tnft) && (tnftTokenId == _tnftTokenId),
-            "WTT"
-        );
-        require(
-            ((keepShare + sellShare) == fullShare) && (sellShare > 0),
-            "SNC"
-        );
-        require(owner == tnft.ownerOf(tnftTokenId), "WO");
-        _claim(address(tnft), tnftTokenId);
-        //take the tnft
-        tnft.safeTransferFrom(owner, address(this), tnftTokenId);
+    /// @notice takes the original TNFT and breaks it into new fraction TNFTs
+    function initialSplit(address owner, address _tnft, uint256 _tnftTokenId, uint256 keepShare, uint256 sellShare) external override onlyFactory returns (uint256 tokenKeep, uint256 tokenSell) {
+        require((address(tnft) == _tnft) && (tnftTokenId == _tnftTokenId), "WTT"); // make sure tnft and tokenID are associated with this contract
+        require(((keepShare + sellShare) == fullShare) && (sellShare > 0), "SNC"); // keepShare + sellShare must == full pie. sell must be more than 0
+        require(owner == tnft.ownerOf(tnftTokenId), "WO"); // owner must be the current owner of the token
+        _claim(address(tnft), tnftTokenId); // auto claim passive rewards for owner
 
-        uint256 revenueShare_ = _burnShareHelper(address(tnft), tnftTokenId);
+        tnft.safeTransferFrom(owner, address(this), tnftTokenId); // take the initial tnft
+
+        uint256 revenueShare_ = _burnShareHelper(address(tnft), tnftTokenId); // TODO
+    
+        // keepShare = 60
+        // sellShare = 40
 
         if (keepShare > 0) {
             //mint 1st fraction and send it to owner
@@ -260,9 +241,9 @@ contract TangibleFractionsNFT is
             //set shares
             fractionShares[tokenKeep] = keepShare;
             _mintFtnft(
-                owner,
-                tokenKeep,
-                (revenueShare_ * keepShare) / fullShare,
+                owner, // owner = address(1)
+                tokenKeep, // 1
+                (revenueShare_ * keepShare) / fullShare, 
                 (1e18 * keepShare) / fullShare
             );
         }
@@ -286,11 +267,7 @@ contract TangibleFractionsNFT is
         uint256 rentShare_;
     }
 
-    function fractionalize(uint256 fractionTokenId, uint256[] calldata shares)
-        external
-        override
-        returns (uint256[] memory fractTokenIds)
-    {
+    function fractionalize(uint256 fractionTokenId, uint256[] calldata shares) external override returns (uint256[] memory fractTokenIds) {
         uint256 length = shares.length;
         require(length >= 2, "2");
         require(ownerOf(fractionTokenId) == msg.sender, "NOW");

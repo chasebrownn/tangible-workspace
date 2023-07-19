@@ -27,7 +27,7 @@ interface IRevisedTNFT is IERC1155{
 
     // function storageEndTime(uint256 tokenId) external view returns (uint256 storageEnd);
 
-    function blackListedTokens(uint256 tokenId) external view returns (bool);
+    function isBlacklisted(uint256 tokenId) external view returns (bool);
 
     // /// @dev The function returns the price per year for storage.
     // function storagePricePerYear() external view returns (uint256);

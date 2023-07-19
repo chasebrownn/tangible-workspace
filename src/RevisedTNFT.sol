@@ -22,7 +22,7 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
     string private baseUri;
     uint256 public lastTokenId = 0;
 
-    mapping(uint256 => bool) public override blackListedTokens;
+    mapping(uint256 => bool) public override isBlacklisted;
     mapping(uint256 => string) public override fingerprintToProductId;
     mapping(uint256 => uint256) public override tokensFingerprint;
     mapping(uint256 => bool) public tnftCustody;
@@ -32,6 +32,8 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
 
     uint256 constant public MAX_BALANCE = 100;
 
+
+    // ~ Constructor ~
 
     /// @notice Initialize contract
     constructor(
@@ -47,6 +49,8 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         category = _category;
         symbol = _symbol;
         baseUri = _uri;
+
+        // TODO: Initialize contract on RentManager, PassiveManager, and RevShareManager
     }
 
 
@@ -59,11 +63,6 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
 
 
     // ~ External Functions ~
-
-    // TODO
-
-
-    // ~ External Functions ERC1155 ~
 
     /// @notice Queries the approval status of an operator for a given owner.
     function isApprovedForAll(address account, address operator) public view override(ERC1155, IERC1155) returns (bool) {
@@ -103,7 +102,7 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
     }
 
 
-    // ~ Factory Functions ~
+    // ~ Permissioned Functions ~
 
     /// @notice mints multiple TNFTs.
     function produceMultipleTNFTtoStock(uint256 count, uint256 fingerprint, address toStock) external override onlyFactory returns (uint256[] memory) {
@@ -119,9 +118,6 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
 
         return mintedTnfts;
     }
-
-
-    // ~ Factory Admin Functions ~
 
     /// @notice This function is used to update the baseUri state variable.
     /// @dev Only callable by factory admin.
@@ -155,6 +151,21 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         }
     }
 
+    /// @notice This function sets a tokenId to bool value in isBlacklisted mapping.
+    /// @dev If value is set to true, tokenId will not be able to be transfered unless to an admin.
+    function blacklistToken(uint256 tokenId, bool blacklisted) external onlyFactoryAdmin {
+        isBlacklisted[tokenId] = blacklisted;
+    }
+
+    /// @notice Allows the factory admin to burn 1 or more tokens
+    /// @dev msg.sender must be factory admin AND holding entire ownership balance
+    function burn(uint256 tokenId) external onlyFactoryAdmin {
+        address msgSender = msg.sender;
+        require(balanceOf(msgSender, tokenId) == MAX_BALANCE);
+        //_setTNFTStatus(tokenId, false);
+        _burn(msgSender, tokenId, MAX_BALANCE);
+    }
+
 
     // ~ Internal Functions ~
 
@@ -163,8 +174,29 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         uint256 tokenToMint = ++lastTokenId;
 
         _mint(toStock, tokenToMint, MAX_BALANCE, abi.encodePacked(fingerprint));
+        // if (paysRent) {
+        //     RevenueShare rentRevenueShare_ = IFactory(factory)
+        //         .rentShare()
+        //         .forToken(address(this), tokenToMint);
+        //     rentRevenueShare[tokenToMint] = address(rentRevenueShare_);
+
+        //     _roleGranter(
+        //         address(rentRevenueShare_),
+        //         address(this),
+        //         SHARE_MANAGER_ROLE
+        //     );
+
+        //     _roleGranter(
+        //         address(rentRevenueShare_),
+        //         address(this),
+        //         CLAIMER_ROLE
+        //     );
+
+        //     rentRevenueShare_.updateShare(address(this), tokenToMint, 1e18);
+        // }
 
         tokensFingerprint[tokenToMint] = fingerprint;
+        tnftCustody[tokenToMint] = true;
 
         emit ProducedTNFT(tokenToMint);
         return tokenToMint;
@@ -182,9 +214,6 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
     //     return false;
     // }
 
-
-    // ~ Internal Functions ERC1155 ~
-
     /// @notice Internal fucntion to check conditions prior to initiating a transfer of token(s).
     function _beforeTokenTransfer(address operator, address from, address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data) internal override(ERC1155) {
         super._beforeTokenTransfer(operator, from, to, ids, amounts, data);
@@ -199,16 +228,50 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         }
 
         // TODO: Rebuild section
-        // we prevent transfers if blacklisted or not in our custody(redeemed)
-        // if (blackListedTokens[tokenId] || !tnftCustody[tokenId]) {
-        //     revert("BL");
-        // }
+        // TODO: If there is a transfer of any amount LESS than 100, execute an auto claim and storage check -> handle batch here
+
+        for (uint256 i; i < ids.length;) {
+            require(!isBlacklisted[ids[i]] && !tnftCustody[ids[i]]);
+            unchecked {
+                ++i;
+            }
+        }
+
         // for houses there is no storage so just allow transfer
         // if (!storageRequired) {
         //     return;
         // }
         // if (!_isStorageFeePaid(tokenId) && !_isTokenMinter(from, tokenId)) {
         //     revert("CT");
+        // }
+    }
+
+    function _setCustodyStatus(uint256 tokenId, bool inOurCustody) internal {
+        tnftCustody[tokenId] = inOurCustody;
+        //this should execute only once
+        // if (tnftToPassiveNft[tokenId] != 0 && !inOurCustody) {
+        //     PassiveIncomeNFT piNft = IFactory(factory).passiveNft();
+        //     IERC721(address(piNft)).safeTransferFrom(
+        //         address(this),
+        //         ownerOf(tokenId), //send it to the owner of TNFT
+        //         tnftToPassiveNft[tokenId]
+        //     );
+        //     PassiveIncomeNFT.Lock memory lock = piNft.locks(
+        //         tnftToPassiveNft[tokenId]
+        //     );
+        //     _updateRevenueShare(
+        //         address(this),
+        //         tokenId,
+        //         -int256(lock.lockedAmount + lock.maxPayout)
+        //     );
+        //     _updateRevenueShare(
+        //         address(piNft),
+        //         tnftToPassiveNft[tokenId],
+        //         int256(lock.lockedAmount + lock.maxPayout)
+        //     );
+
+        //     piNft.setGenerateRevenue(tnftToPassiveNft[tokenId], true);
+        //     delete tnftToPassiveNft[tokenId];
         // }
     }
 
