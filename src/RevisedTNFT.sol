@@ -101,6 +101,17 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         return IERC1155Receiver.onERC1155Received.selector;
     }
 
+    /// @notice External function for setting custody status of a tokenid
+    function setCustodyStatuses(uint256[] calldata tokenIds, bool[] calldata inOurCustody) external onlyFactory {
+        uint256 length = tokenIds.length;
+        for (uint256 i; i < length;) {
+            _setCustodyStatus(tokenIds[i], inOurCustody[i]);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
 
     // ~ Permissioned Functions ~
 
@@ -231,7 +242,7 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         // TODO: If there is a transfer of any amount LESS than 100, execute an auto claim and storage check -> handle batch here
 
         for (uint256 i; i < ids.length;) {
-            require(!isBlacklisted[ids[i]] && !tnftCustody[ids[i]]);
+            require(!isBlacklisted[ids[i]] && !tnftCustody[ids[i]], "RevisedTNFT.sol::_beforeTokenTransfer() token is in contract custody or blacklisted");
             unchecked {
                 ++i;
             }
