@@ -5,6 +5,7 @@ import { AdminAccess } from "./abstract/AdminAccess.sol";
 import { IFactory, PassiveIncomeNFT } from "./interfaces/IFactory.sol";
 
 import { IERC1155 } from "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
+import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -84,34 +85,33 @@ contract PassiveManager is AdminAccess {
         }
     }
 
-    // TODO:
-    // function touchBase() external {
-    //     address caller = msg.sender;
-    //     require(registered[caller], "PassiveManager.sol::touchBase() caller is not registered");
+    function deletePassiveNft(uint256 tokenId, address owner) external {
+        address caller = msg.sender;
+        require(registered[caller], "PassiveManager.sol::deletePassiveNft() caller is not registered");
 
-    //     PassiveIncomeNFT piNft = IFactory(factory).passiveNft();
-    //     IERC721(address(piNft)).safeTransferFrom(
-    //         address(this),
-    //         ownerOf(tokenId), //send it to the owner of TNFT
-    //         tnftToPassiveNft[caller][tokenId]
-    //     );
-    //     PassiveIncomeNFT.Lock memory lock = piNft.locks(
-    //         tnftToPassiveNft[caller][tokenId]
-    //     );
-    //     _updateRevenueShare(
-    //         address(this),
-    //         tokenId,
-    //         -int256(lock.lockedAmount + lock.maxPayout)
-    //     );
-    //     _updateRevenueShare(
-    //         address(piNft),
-    //         tnftToPassiveNft[caller][tokenId],
-    //         int256(lock.lockedAmount + lock.maxPayout)
-    //     );
+        PassiveIncomeNFT piNft = IFactory(factory).passiveNft();
+        IERC721(address(piNft)).safeTransferFrom(
+            address(this),
+            owner, //send it to the owner of TNFT
+            tnftToPassiveNft[caller][tokenId]
+        );
+        PassiveIncomeNFT.Lock memory lock = piNft.locks(
+            tnftToPassiveNft[caller][tokenId]
+        );
+        _updateRevenueShare(
+            address(this),
+            tokenId,
+            -int256(lock.lockedAmount + lock.maxPayout)
+        );
+        _updateRevenueShare(
+            address(piNft),
+            tnftToPassiveNft[caller][tokenId],
+            int256(lock.lockedAmount + lock.maxPayout)
+        );
 
-    //     piNft.setGenerateRevenue(tnftToPassiveNft[caller][tokenId], true);
-    //     delete tnftToPassiveNft[caller][tokenId];
-    // }
+        piNft.setGenerateRevenue(tnftToPassiveNft[caller][tokenId], true);
+        delete tnftToPassiveNft[caller][tokenId];
+    }
 
 
     // ~ Internal Functions ~

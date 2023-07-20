@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.7;
 
-// TODO: Specify imports
-import "./IRevisedTNFT.sol";
-import "./interfaces/IFactory.sol";
-import "./interfaces/IOwnable.sol";
-import "./abstract/AdminAccess.sol";
+import { IRevisedTNFT } from "./IRevisedTNFT.sol";
+import { IFactory } from "./interfaces/IFactory.sol";
+import { IOwnable } from "./interfaces/IOwnable.sol";
+import { AdminAccess, AccessControl } from  "./abstract/AdminAccess.sol";
 import { IStorageManager } from "./IStorageManager.sol";
+import { IPassiveManager } from "./IPassiveManager.sol";
 
-import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
-import "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
-import "@openzeppelin/contracts/utils/Strings.sol";
+import { ERC1155 } from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
+import { IERC1155Receiver, IERC165 } from "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
+import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 
 contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
     using Strings for uint256;
@@ -30,9 +30,9 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
     mapping(uint256 => bool) public tnftCustody;
     bool public storageRequired;
 
-    address public storageManager;
+    IStorageManager public storageManager;
     address public passiveManager;
-    mapping(uint256 => address[]) public owners; // TODO: Elaborate on this
+    mapping(uint256 => address[]) public owners;
 
     string[] public productIds;
     uint256[] public fingeprintsInTnft;
@@ -59,11 +59,9 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         category = _category;
         symbol = _symbol;
         baseUri = _uri;
-        storageManager = _storageManager;
+        storageManager = IStorageManager(_storageManager);
         storageRequired = _storageRequired;
-        passiveManager = _passiveManager;
-
-        // TODO: Initialize contract on RentManager, PassiveManager, and RevShareManager
+        passiveManager = IPassiveManager(_passiveManager);
     }
 
 
@@ -309,33 +307,11 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
 
     function _setCustodyStatus(uint256 tokenId, bool inOurCustody) internal {
         tnftCustody[tokenId] = inOurCustody;
-        
-        // TODO:
-        //this should execute only once
-        // if (tnftToPassiveNft[tokenId] != 0 && !inOurCustody) {
-        //     PassiveIncomeNFT piNft = IFactory(factory).passiveNft();
-        //     IERC721(address(piNft)).safeTransferFrom(
-        //         address(this),
-        //         ownerOf(tokenId), //send it to the owner of TNFT
-        //         tnftToPassiveNft[caller][tokenId]
-        //     );
-        //     PassiveIncomeNFT.Lock memory lock = piNft.locks(
-        //         tnftToPassiveNft[caller][tokenId]
-        //     );
-        //     _updateRevenueShare(
-        //         address(this),
-        //         tokenId,
-        //         -int256(lock.lockedAmount + lock.maxPayout)
-        //     );
-        //     _updateRevenueShare(
-        //         address(piNft),
-        //         tnftToPassiveNft[caller][tokenId],
-        //         int256(lock.lockedAmount + lock.maxPayout)
-        //     );
 
-        //     piNft.setGenerateRevenue(tnftToPassiveNft[caller][tokenId], true);
-        //     delete tnftToPassiveNft[caller][tokenId];
-        // }
+        //this should execute only once
+        if (passiveManager.tnftToPassiveNft(tokenId) != 0 && !inOurCustody) {
+           passiveManager.deletePassiveNft(tokenId, owners[tokenId][0]);
+        }
     }
 
     function _removeFromOwners(uint256 tokenId, address owner) internal {

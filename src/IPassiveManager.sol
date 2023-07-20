@@ -6,4 +6,6 @@ pragma solidity ^0.8.7;
 interface IPassiveManager {
 
     function tnftToPassiveNft(address _contract, uint256 tokenId) external returns (uint256 passiveTokenId);
+
+    function deletePassiveNft(uint256 tokenId) external;
 }

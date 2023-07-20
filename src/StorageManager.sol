@@ -48,7 +48,6 @@ contract StorageManager is AdminAccess, IStorageManager {
 
     /// @notice This function sets a contract to bool value in registered mapping.
     /// @dev If true, the provided contract will be known to require a storage payment
-    // TODO: Consider using this function to also set other variables like initial storage prices, fixed, etc.
     function registerWithStorageManager(address _contract, bool _paysForStorage) external override onlyFactoryAdmin {
         registered[_contract] = _paysForStorage;
     }

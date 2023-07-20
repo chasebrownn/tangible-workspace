@@ -124,6 +124,7 @@ contract RevisedTNFTTest is Test {
         assertEq(tNftContract.category(), "Tangible NFT");
         assertEq(tNftContract.symbol(), "TNFT");
         assertEq(tNftContract.baseURI(), BASE_URI);
+        assertEq(tNftContract.uri(1), "https://example.gateway.com/ipfs/CID/1.json");
         assertEq(tNftContract.lastTokenId(), 0);
         assertEq(storageManager.registered(address(tNftContract)), true);
     }
