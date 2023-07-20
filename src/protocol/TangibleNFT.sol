@@ -233,11 +233,7 @@ contract TangibleNFT is
         );
     }
 
-    function setRolesForFraction(address ftnft, uint256 tnftTokenId)
-        external
-        override
-        onlyFactory
-    {
+    function setRolesForFraction(address ftnft, uint256 tnftTokenId) external override onlyFactory {
         RevenueShare rentRevenueShare_ = IFactory(factory).rentShare().forToken(
             address(this),
             tnftTokenId

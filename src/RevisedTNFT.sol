@@ -27,6 +27,8 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
     mapping(uint256 => uint256) public override tokensFingerprint;
     mapping(uint256 => bool) public tnftCustody;
 
+    mapping(uint256 => address) public ownerOf; // TODO: May be useful. Come back
+
     string[] public productIds;
     uint256[] public fingeprintsInTnft;
 

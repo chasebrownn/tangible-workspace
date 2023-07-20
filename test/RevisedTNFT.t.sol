@@ -5,7 +5,7 @@ import "../lib/forge-std/src/Test.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
 
 import { RevisedTangibleNFT } from "../src/RevisedTNFT.sol";
-import { RentManager } from "../src/RentManager.sol";
+import { StorageManager } from "../src/StorageManager.sol";
 import { Factory } from "../src/protocol/Factory.sol";
 
 
@@ -15,7 +15,7 @@ import { Factory } from "../src/protocol/Factory.sol";
 contract RevisedTNFTTest is Test {
     RevisedTangibleNFT public tNftContract;
     Factory public factory;
-    RentManager public rentManager;
+    StorageManager public storageManager;
 
     // Global constants
     address public constant USDC = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
@@ -38,8 +38,8 @@ contract RevisedTNFTTest is Test {
             FACTORY_OWNER
         );
 
-        // Deploy RentManager
-        rentManager = new RentManager(
+        // Deploy StorageManager
+        storageManager = new StorageManager(
             address(factory)
         );
 
@@ -52,9 +52,9 @@ contract RevisedTNFTTest is Test {
         );
 
         vm.startPrank(FACTORY_OWNER);
-        rentManager.registerWithRentManager(address(tNftContract), true);
-        rentManager.toggleStorageFee(address(tNftContract), true);
-        rentManager.setStoragePricePerYear(address(tNftContract), 12_000_000); // $12/yr in USDC
+        storageManager.registerWithStorageManager(address(tNftContract), true);
+        storageManager.toggleStorageFee(address(tNftContract), true);
+        storageManager.setStoragePricePerYear(address(tNftContract), 12_000_000); // $12/yr in USDC
         vm.stopPrank();
 
         vm.label(STORAGE_ADDY, "Storage_Address");
@@ -113,7 +113,7 @@ contract RevisedTNFTTest is Test {
     }
 
 
-    // ~ RevisedTNFT Unit Tests ~
+    // ~ Initial State Test ~
 
     /// @notice Initial state test.
     function test_tangible_revisedTNFT_init_state() public {
@@ -122,8 +122,11 @@ contract RevisedTNFTTest is Test {
         assertEq(tNftContract.symbol(), "TNFT");
         assertEq(tNftContract.baseURI(), BASE_URI);
         assertEq(tNftContract.lastTokenId(), 0);
-        assertEq(rentManager.registered(address(tNftContract)), true);
+        assertEq(storageManager.registered(address(tNftContract)), true);
     }
+
+
+    // ~ RevisedTangibleNFT Unit Tests ~
 
     /// @notice This test verifies the functionality of safeTransferFrom.
     function test_tangible_revisedTNFT_safeTransferFrom() public {
@@ -203,9 +206,9 @@ contract RevisedTNFTTest is Test {
     }
 
 
-    // ~ RentManager Unit Tests ~
+    // ~ StorageManager Unit Tests ~
 
-    function test_tangible_rentManager_adjustStorageAndGetAmount() public {
+    function test_tangible_storageManager_adjustStorageAndGetAmount() public {
         // set up new fingerprint to mint
         _initializeFingerprint();
         
@@ -220,14 +223,14 @@ contract RevisedTNFTTest is Test {
         vm.stopPrank();
 
         // Pre-state check.
-        assertEq(rentManager.storageEndTime(address(tNftContract), 1), 0);
+        assertEq(storageManager.storageEndTime(address(tNftContract), 1), 0);
 
         // execute adjustStorageAndGetAmount
         vm.prank(tNftContract.factory());
-        uint256 amount = rentManager.adjustStorageAndGetAmount(address(tNftContract), 1, 1, 0);
+        uint256 amount = storageManager.adjustStorageAndGetAmount(address(tNftContract), 1, 1, 0);
 
         // Post-state check.
-        assertEq(rentManager.storageEndTime(address(tNftContract), 1), block.timestamp + 365 days);
+        assertEq(storageManager.storageEndTime(address(tNftContract), 1), block.timestamp + 365 days);
         assertEq(amount, 12_000_000);
     }
 }
