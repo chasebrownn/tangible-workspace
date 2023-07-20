@@ -52,52 +52,66 @@ contract PassiveManager is AdminAccess {
     // TODO: TEST
     function lockTNGBL(address _contract, uint256 tokenId, uint256 _years, uint256 lockedAmount, bool onlyLock) external onlyFactory {
         require(registered[_contract], "PassiveManager.sol::lockTNGBL() contract provided is not registered");
-        //approve immediatelly speinding of TNGBL token in favor of
+        //approve immediatelly spending of TNGBL token in favor of
         //passive incomeNFT contract
         PassiveIncomeNFT piNft = IFactory(factory).passiveNft();
-        IFactory(factory).TNGBL().approve(address(piNft), lockedAmount);
+        IFactory(factory).TNGBL().approve(address(piNft), lockedAmount); // approve spend 
         //handle passive income minting
         uint8 toLock = uint8(12 * _years);
         if (toLock > piNft.maxLockDuration()) {
             toLock = piNft.maxLockDuration();
         }
-        uint256 passiveTokenId = piNft.mint(
-            _contract,
-            lockedAmount,
-            toLock,
-            onlyLock,
-            false
-        );
-        tnftToPassiveNft[_contract][tokenId] = passiveTokenId;
+        uint256 passiveTokenId = piNft.mint(_contract, lockedAmount, toLock, onlyLock, false); // mint passive nft given lock time and amount of $TNGBL
+        tnftToPassiveNft[_contract][tokenId] = passiveTokenId; // set passive nft tokenId in mapping
 
-        PassiveIncomeNFT.Lock memory lock = piNft.locks(
-            tnftToPassiveNft[_contract][tokenId]
-        );
-        _updateRevenueShare(
-            _contract,
-            tokenId,
-            int256(lock.lockedAmount + lock.maxPayout)
-        );
+        PassiveIncomeNFT.Lock memory lock = piNft.locks(tnftToPassiveNft[_contract][tokenId]); 
+        _updateRevenueShare(_contract, tokenId, int256(lock.lockedAmount + lock.maxPayout));
     }
 
     // TODO: TEST
     function claim(address _contract, uint256 tokenId, uint256 amount) external {
         require(IERC1155(_contract).balanceOf(msg.sender, tokenId) > 0, "PassiveManager.sol::lockTNGBL() insufficient balance");
+
         PassiveIncomeNFT piNft = IFactory(factory).passiveNft();
         (uint256 free, ) = piNft.claimableIncome(tnftToPassiveNft[_contract][tokenId]);
+
         piNft.claim(tnftToPassiveNft[_contract][tokenId], amount);
         IFactory(factory).TNGBL().safeTransfer(msg.sender, amount);
+
         if (amount > free) {
-            PassiveIncomeNFT.Lock memory lock = piNft.locks(
-                tnftToPassiveNft[_contract][tokenId]
-            );
-            _updateRevenueShare(
-                _contract,
-                tokenId,
-                int256(lock.lockedAmount + lock.maxPayout)
-            );
+            PassiveIncomeNFT.Lock memory lock = piNft.locks(tnftToPassiveNft[_contract][tokenId]);
+            _updateRevenueShare(_contract, tokenId, int256(lock.lockedAmount + lock.maxPayout));
         }
     }
+
+    // TODO:
+    // function touchBase() external {
+    //     address caller = msg.sender;
+    //     require(registered[caller], "PassiveManager.sol::touchBase() caller is not registered");
+
+    //     PassiveIncomeNFT piNft = IFactory(factory).passiveNft();
+    //     IERC721(address(piNft)).safeTransferFrom(
+    //         address(this),
+    //         ownerOf(tokenId), //send it to the owner of TNFT
+    //         tnftToPassiveNft[caller][tokenId]
+    //     );
+    //     PassiveIncomeNFT.Lock memory lock = piNft.locks(
+    //         tnftToPassiveNft[caller][tokenId]
+    //     );
+    //     _updateRevenueShare(
+    //         address(this),
+    //         tokenId,
+    //         -int256(lock.lockedAmount + lock.maxPayout)
+    //     );
+    //     _updateRevenueShare(
+    //         address(piNft),
+    //         tnftToPassiveNft[caller][tokenId],
+    //         int256(lock.lockedAmount + lock.maxPayout)
+    //     );
+
+    //     piNft.setGenerateRevenue(tnftToPassiveNft[caller][tokenId], true);
+    //     delete tnftToPassiveNft[caller][tokenId];
+    // }
 
 
     // ~ Internal Functions ~

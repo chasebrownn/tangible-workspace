@@ -50,7 +50,8 @@ contract RevisedTNFTTest is Test {
             "TNFT",
             BASE_URI,
             address(storageManager),
-            true
+            true,
+            address(2) //TODO: update
         );
 
         vm.startPrank(FACTORY_OWNER);
@@ -138,6 +139,8 @@ contract RevisedTNFTTest is Test {
         // Pre-state check.
         assertEq(tNftContract.balanceOf(address(JOE), 1), 0);
         assertEq(tNftContract.balanceOf(address(LEO), 1), 0);
+        address[] memory arrayOwners = tNftContract.getOwners(1);
+        assertEq(arrayOwners.length, 0);
 
         // factory calls produceMultipleTNFTtoStock.
         vm.startPrank(tNftContract.factory());
@@ -148,6 +151,13 @@ contract RevisedTNFTTest is Test {
         // Verify Joe received his TNFT
         assertEq(tNftContract.balanceOf(address(JOE), 1), 100);
         assertEq(tNftContract.balanceOf(address(LEO), 1), 0);
+        arrayOwners = tNftContract.getOwners(1);
+        assertEq(arrayOwners.length, 1);
+        assertEq(arrayOwners[0], address(JOE));
+
+        // execute adjustStorageAndGetAmount -> Joe extends his storage expiration.
+        vm.prank(tNftContract.factory());
+        storageManager.adjustStorageAndGetAmount(address(tNftContract), 1, 1, 0);
 
         // Verify Joe cannot transfer more than sufficient balance.
         vm.prank(JOE);
@@ -161,6 +171,47 @@ contract RevisedTNFTTest is Test {
         // Post-state check.
         assertEq(tNftContract.balanceOf(address(JOE), 1), 60);
         assertEq(tNftContract.balanceOf(address(LEO), 1), 40);
+        arrayOwners = tNftContract.getOwners(1);
+        assertEq(arrayOwners.length, 2);
+        assertEq(arrayOwners[0], address(JOE));
+        assertEq(arrayOwners[1], address(LEO));
+
+        // Joe transfers the rest of his tokens to Leo.
+        vm.prank(JOE);
+        tNftContract.safeTransferFrom(JOE, LEO, 1, 60, bytes(""));
+
+        // Final-state check.
+        assertEq(tNftContract.balanceOf(address(JOE), 1), 0);
+        assertEq(tNftContract.balanceOf(address(LEO), 1), 100);
+        arrayOwners = tNftContract.getOwners(1);
+        assertEq(arrayOwners.length, 1);
+        assertEq(arrayOwners[0], address(LEO));
+    }
+
+    /// @notice This test verifies that an EOA cannot transfer their token if they have not paid rent.
+    function test_tangible_revisedTNFT_safeTransferFrom_noStoragePaid() public {
+        // set up new fingerprint to mint
+        _initializeFingerprint();
+        
+        // Pre-state check.
+        assertEq(tNftContract.balanceOf(address(JOE), 1), 0);
+
+        // factory calls produceMultipleTNFTtoStock.
+        vm.startPrank(tNftContract.factory());
+        tNftContract.produceMultipleTNFTtoStock(1, 42, address(JOE));
+        tNftContract.setCustodyStatuses(_asSingletonArrayUint(1), _asSingletonArrayBool(false));
+        vm.stopPrank();
+
+        // Verify Joe received his TNFT
+        assertEq(tNftContract.balanceOf(address(JOE), 1), 100);
+
+        // Verify Joe cannot transfer his token(s) since he has not paid rent.
+        vm.prank(JOE);
+        vm.expectRevert("RevisedTNFT.sol::_beforeTokenTransfer() storage fee has not been paid for this token");
+        tNftContract.safeTransferFrom(JOE, LEO, 1, 40, bytes(""));
+
+        // Post-state check.
+        assertEq(tNftContract.balanceOf(address(JOE), 1), 100);
     }
 
     /// @notice This method tests the produceMultipleTNFTtoStock() function with a single token.

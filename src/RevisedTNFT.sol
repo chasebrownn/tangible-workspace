@@ -16,6 +16,7 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
     using Strings for uint256;
 
     // ~ State Variabls ~
+    // TODO: Pack
 
     address public factory;
     string public category;
@@ -30,8 +31,8 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
     bool public storageRequired;
 
     address public storageManager;
-
-    mapping(uint256 => address) public ownerOf; // TODO: May be useful. Come back
+    address public passiveManager;
+    mapping(uint256 => address[]) public owners; // TODO: Elaborate on this
 
     string[] public productIds;
     uint256[] public fingeprintsInTnft;
@@ -48,7 +49,8 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         string memory _symbol,
         string memory _uri,
         address _storageManager,
-        bool _storageRequired
+        bool _storageRequired,
+        address _passiveManager
     ) ERC1155(_uri) {
 
         _grantRole(FACTORY_ROLE, _factory);
@@ -59,6 +61,7 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         baseUri = _uri;
         storageManager = _storageManager;
         storageRequired = _storageRequired;
+        passiveManager = _passiveManager;
 
         // TODO: Initialize contract on RentManager, PassiveManager, and RevShareManager
     }
@@ -74,9 +77,56 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
 
     // ~ External Functions ~
 
-    /// @notice Queries the approval status of an operator for a given owner.
-    function isApprovedForAll(address account, address operator) public view override(ERC1155, IERC1155) returns (bool) {
-        return operator == factory || ERC1155.isApprovedForAll(account, operator);
+    /**
+     * @dev Transfers `amount` tokens of token type `id` from `from` to `to`.
+     *
+     * Emits a {TransferSingle} event.
+     *
+     * Requirements:
+     *
+     * - `to` cannot be the zero address.
+     * - `from` must have a balance of tokens of type `id` of at least `amount`.
+     * - If `to` refers to a smart contract, it must implement {IERC1155Receiver-onERC1155Received} and return the
+     * acceptance magic value.
+     */
+    function _safeTransferFrom(address from, address to, uint256 id, uint256 amount, bytes memory data) internal virtual override {
+        if (balanceOf(to, id) == 0 && amount > 0) {
+            owners[id].push(to);
+        }
+        super._safeTransferFrom(from, to, id, amount, data);
+        if (balanceOf(from, id) == 0) {
+            _removeFromOwners(id, from);
+        }
+    }
+
+    /**
+     * @dev xref:ROOT:erc1155.adoc#batch-operations[Batched] version of {_safeTransferFrom}.
+     *
+     * Emits a {TransferBatch} event.
+     *
+     * Requirements:
+     *
+     * - If `to` refers to a smart contract, it must implement {IERC1155Receiver-onERC1155BatchReceived} and return the
+     * acceptance magic value.
+     */
+    function _safeBatchTransferFrom(address from, address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data) internal virtual override {
+        for (uint256 i; i < ids.length;) {
+            if (balanceOf(to, ids[i]) == 0 && amounts[i] > 0) {
+                owners[ids[i]].push(to);
+            }
+            unchecked {
+                ++i;
+            }
+        }
+        super._safeBatchTransferFrom(from, to, ids, amounts, data);
+        for (uint256 i; i < ids.length;) {
+            if (balanceOf(from, ids[i]) == 0) {
+                _removeFromOwners(ids[i], from);
+            }
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     /**
@@ -183,7 +233,8 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
     function burn(uint256 tokenId) external onlyFactoryAdmin {
         address msgSender = msg.sender;
         require(balanceOf(msgSender, tokenId) == MAX_BALANCE);
-        //_setTNFTStatus(tokenId, false);
+        _removeFromOwners(tokenId, msgSender);
+        _setCustodyStatus(tokenId, false);
         _burn(msgSender, tokenId, MAX_BALANCE);
     }
 
@@ -218,6 +269,7 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
 
         tokensFingerprint[tokenToMint] = fingerprint;
         tnftCustody[tokenToMint] = true;
+        owners[tokenToMint].push(toStock);
 
         emit ProducedTNFT(tokenToMint);
         return tokenToMint;
@@ -228,19 +280,13 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         baseUri = newUri;
     }
 
-    // function _isTokenMinter(address from, uint256 tokenId) internal view returns (bool) {
-    //     if (_originalTokenOwners[tokenId] == from) {
-    //         return true;
-    //     }
-    //     return false;
-    // }
-
     /// @notice Internal fucntion to check conditions prior to initiating a transfer of token(s).
     function _beforeTokenTransfer(address operator, address from, address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data) internal override(ERC1155) {
         super._beforeTokenTransfer(operator, from, to, ids, amounts, data);
         // Allow operations if admin, factory or 0 address
         if (
             IFactory(factory).isFactoryAdmin(from) ||
+            IFactory(factory).isFactoryAdmin(to) ||
             (factory == from) ||
             from == address(0) ||
             to == address(0)
@@ -248,7 +294,6 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
             return;
         }
 
-        // TODO: Rebuild section
         // TODO: If there is a transfer of any amount LESS than 100, execute an auto claim and storage check -> handle batch here
 
         for (uint256 i; i < ids.length;) {
@@ -260,28 +305,22 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
                 ++i;
             }
         }
-
-        // for houses there is no storage so just allow transfer
-        // if (!storageRequired) {
-        //     return;
-        // }
-        // if (!_isStorageFeePaid(tokenId) && !_isTokenMinter(from, tokenId)) {
-        //     revert("CT");
-        // }
     }
 
     function _setCustodyStatus(uint256 tokenId, bool inOurCustody) internal {
         tnftCustody[tokenId] = inOurCustody;
+        
+        // TODO:
         //this should execute only once
         // if (tnftToPassiveNft[tokenId] != 0 && !inOurCustody) {
         //     PassiveIncomeNFT piNft = IFactory(factory).passiveNft();
         //     IERC721(address(piNft)).safeTransferFrom(
         //         address(this),
         //         ownerOf(tokenId), //send it to the owner of TNFT
-        //         tnftToPassiveNft[tokenId]
+        //         tnftToPassiveNft[caller][tokenId]
         //     );
         //     PassiveIncomeNFT.Lock memory lock = piNft.locks(
-        //         tnftToPassiveNft[tokenId]
+        //         tnftToPassiveNft[caller][tokenId]
         //     );
         //     _updateRevenueShare(
         //         address(this),
@@ -290,13 +329,33 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         //     );
         //     _updateRevenueShare(
         //         address(piNft),
-        //         tnftToPassiveNft[tokenId],
+        //         tnftToPassiveNft[caller][tokenId],
         //         int256(lock.lockedAmount + lock.maxPayout)
         //     );
 
-        //     piNft.setGenerateRevenue(tnftToPassiveNft[tokenId], true);
-        //     delete tnftToPassiveNft[tokenId];
+        //     piNft.setGenerateRevenue(tnftToPassiveNft[caller][tokenId], true);
+        //     delete tnftToPassiveNft[caller][tokenId];
         // }
+    }
+
+    function _removeFromOwners(uint256 tokenId, address owner) internal {
+        (uint256 i, bool exists) = _findOwner(tokenId, owner);
+        if (exists) {
+            owners[tokenId][i] = owners[tokenId][owners[tokenId].length-1];
+            owners[tokenId].pop();
+        }
+    }
+
+    function _findOwner(uint256 tokenId, address owner) internal returns (uint256, bool) {
+        for (uint256 i; i < owners[tokenId].length;) {
+            if (owners[tokenId][i] == owner) {
+                return (i, true);
+            }
+            unchecked {
+                ++i;
+            }
+        }
+        return (0, false);
     }
 
 
@@ -314,6 +373,10 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
 
     function supportsInterface(bytes4 interfaceId) public view virtual override(AccessControl, ERC1155, IERC165) returns (bool) {
         return super.supportsInterface(interfaceId);
+    }
+
+    function getOwners(uint256 tokenId) external view returns (address[] memory) {
+        return owners[tokenId];
     }
 
 }
