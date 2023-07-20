@@ -105,14 +105,12 @@ contract StorageManager is AdminAccess, IStorageManager {
 
     // ~ Internal Functions ~
 
-    function _isStorageFeePaid(address _contract, uint256 tokenId) internal view returns (bool) {
-        return storageEndTime[_contract][tokenId] > block.timestamp;
-    }
+    //
 
 
     // ~ View Functions ~
 
     function isStorageFeePaid(address _contract, uint256 tokenId) public view returns (bool) {
-        return _isStorageFeePaid(_contract, tokenId);
+        return storageEndTime[_contract][tokenId] > block.timestamp;
     }
 }

@@ -48,7 +48,9 @@ contract RevisedTNFTTest is Test {
             address(factory),
             "Tangible NFT",
             "TNFT",
-            BASE_URI
+            BASE_URI,
+            address(storageManager),
+            true
         );
 
         vm.startPrank(FACTORY_OWNER);

@@ -6,6 +6,7 @@ import "./IRevisedTNFT.sol";
 import "./interfaces/IFactory.sol";
 import "./interfaces/IOwnable.sol";
 import "./abstract/AdminAccess.sol";
+import { IStorageManager } from "./IStorageManager.sol";
 
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
@@ -26,6 +27,9 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
     mapping(uint256 => string) public override fingerprintToProductId;
     mapping(uint256 => uint256) public override tokensFingerprint;
     mapping(uint256 => bool) public tnftCustody;
+    bool public storageRequired;
+
+    address public storageManager;
 
     mapping(uint256 => address) public ownerOf; // TODO: May be useful. Come back
 
@@ -42,7 +46,9 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         address _factory,
         string memory _category,
         string memory _symbol,
-        string memory _uri
+        string memory _uri,
+        address _storageManager,
+        bool _storageRequired
     ) ERC1155(_uri) {
 
         _grantRole(FACTORY_ROLE, _factory);
@@ -51,6 +57,8 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         category = _category;
         symbol = _symbol;
         baseUri = _uri;
+        storageManager = _storageManager;
+        storageRequired = _storageRequired;
 
         // TODO: Initialize contract on RentManager, PassiveManager, and RevShareManager
     }
@@ -245,6 +253,9 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
 
         for (uint256 i; i < ids.length;) {
             require(!isBlacklisted[ids[i]] && !tnftCustody[ids[i]], "RevisedTNFT.sol::_beforeTokenTransfer() token is in contract custody or blacklisted");
+            if (storageRequired) {
+                require(IStorageManager(storageManager).isStorageFeePaid(address(this), ids[i]), "RevisedTNFT.sol::_beforeTokenTransfer() storage fee has not been paid for this token");
+            }
             unchecked {
                 ++i;
             }
