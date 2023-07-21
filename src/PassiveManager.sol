@@ -16,27 +16,31 @@ contract PassiveManager is AdminAccess, IPassiveManager {
 
     // ~ State Variabls ~
 
+    /// @notice A mapping from TNFT contract address to bool. If true, contract may reference the StorageManager.
     mapping(address => bool) public override registered;
 
+    /// @notice A mapping from TNFT contract address to tokenId to passiveTokenId.
     mapping(address => mapping(uint256 => uint256)) public tnftToPassiveNft;
 
+    /// @notice Used to store the contract address of Factory.sol.
     address public immutable factory;
 
 
     // ~ Constructor ~
 
-    /// @notice Initialize contract
+    /// @notice Initialize contract.
+    /// @param _factory address of Factory contract.
     constructor(
         address _factory
     ) {
         _grantRole(FACTORY_ROLE, _factory);
-
         factory = _factory;
     }
 
 
     // ~ Modifiers ~
 
+    /// @notice Modifier for verifying msg.sender to be the Factory admin.
     modifier onlyFactoryAdmin() {
         require(IFactory(factory).isFactoryAdmin(msg.sender), "NFA");
         _;
@@ -46,8 +50,10 @@ contract PassiveManager is AdminAccess, IPassiveManager {
     // ~ External Functions ~
 
     /// @notice This function sets a contract to bool value in registered mapping.
-    /// @dev If true, the provided contract will be known to be eligible for rev share rewards
-    function registerWithPassiveManager(address _contract, bool _eligibleForPassive) external override onlyFactoryAdmin {
+    /// @dev Should be called after TNFT contract is deployed if passive income is required. Callable by Factory.
+    /// @param _contract TNFT contract address that should be registered.
+    /// @param _eligibleForPassive If true, needs to be registered and eligible for passive NFTs.
+    function registerWithPassiveManager(address _contract, bool _eligibleForPassive) external override onlyFactory {
         registered[_contract] = _eligibleForPassive;
     }
 
@@ -86,6 +92,7 @@ contract PassiveManager is AdminAccess, IPassiveManager {
         }
     }
 
+    // TODO: Test
     function deletePassiveNft(uint256 tokenId, address owner) external {
         address caller = msg.sender;
         require(registered[caller], "PassiveManager.sol::deletePassiveNft() caller is not registered");
@@ -117,6 +124,10 @@ contract PassiveManager is AdminAccess, IPassiveManager {
 
     // ~ Internal Functions ~
 
+    /// @notice Internal function to update revShare on the revenue share contract.
+    /// @param contractAddress contract address.
+    /// @param tokenId token identifier.
+    /// @param value TODO
     function _updateRevenueShare(address contractAddress, uint256 tokenId, int256 value) internal {
         IFactory(factory).revenueShare().updateShare(contractAddress, tokenId, value);
     }

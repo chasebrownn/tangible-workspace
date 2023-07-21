@@ -3,6 +3,7 @@ pragma solidity ^0.8.7;
 
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 
+/// TODO: Needs major overhaul
 /// @title IRevisedTNFT interface defines the interface of the TangibleNFT
 interface IRevisedTNFT is IERC1155{
     // event StoragePricePerYearSet(uint256 oldPrice, uint256 newPrice);

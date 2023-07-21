@@ -10,6 +10,9 @@ import { Factory } from "../src/protocol/Factory.sol";
 
 
 // TODO: Test querying fraction ownership old vs new approach
+// Showcase main differences
+// Showcase new revisions that would need to happen to support this
+//  If factory were to deploy this new contract
 
 
 contract RevisedTNFTTest is Test {
