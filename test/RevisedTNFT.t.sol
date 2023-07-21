@@ -9,7 +9,7 @@ import { StorageManager } from "../src/StorageManager.sol";
 import { Factory } from "../src/protocol/Factory.sol";
 
 
-// TODO: Test burn
+// TODO: Test querying fraction ownership old vs new approach
 
 
 contract RevisedTNFTTest is Test {
