@@ -57,7 +57,6 @@ contract PassiveManager is AdminAccess, IPassiveManager {
         registered[_contract] = _eligibleForPassive;
     }
 
-    /// TODO: Figure out if the TNFT token is mandatory to lock TNGBL tokens. No current check for ownership which is odd.
     /// @notice This function allows for locking of TNBGL tokens for a passiveIncome NFT.
     /// @dev Only callable by Factory.
     /// @param _contract TNGBL contract address.
@@ -89,7 +88,10 @@ contract PassiveManager is AdminAccess, IPassiveManager {
         _updateRevenueShare(_contract, tokenId, int256(lock.lockedAmount + lock.maxPayout));
     }
 
-    // 
+    /// @notice This function allows a pi owner to receive rewards.
+    /// @param _contract TNFT contract address.
+    /// @param tokenId token identifier.
+    /// @param amount amount of rewards to claim.
     function claim(address _contract, uint256 tokenId, uint256 amount) external override {
         require(IERC1155(_contract).balanceOf(msg.sender, tokenId) > 0, "PassiveManager.sol::lockTNGBL() insufficient balance");
 
@@ -105,37 +107,34 @@ contract PassiveManager is AdminAccess, IPassiveManager {
         // Address(this) now transfers TNGBL from this contract to the msg.sender.
         IFactory(factory).TNGBL().safeTransfer(msg.sender, amount);
 
-        // NOTE: ????
+        // If amount > free, the base rev share is penalized so we update the Factory rev share state.
         if (amount > free) {
             PassiveIncomeNFT.Lock memory lock = piNft.locks(tnftToPassiveNft[_contract][tokenId]);
             _updateRevenueShare(_contract, tokenId, int256(lock.lockedAmount + lock.maxPayout));
         }
     }
 
-    // TODO: Test
-    function deletePassiveNft(uint256 tokenId, address owner) external {
+    /// @notice This function migrates a piNft from this contract to a TNFT owner.
+    /// @param tokenId token identifier.
+    /// @param owner address of TNFT owner. Recipient of rewards.
+    function movePassiveNftToOwner(uint256 tokenId, address owner) external {
         address caller = msg.sender;
         require(registered[caller], "PassiveManager.sol::deletePassiveNft() caller is not registered");
 
+        // Grab piNft address from Factory.
         PassiveIncomeNFT piNft = IFactory(factory).passiveNft();
-        IERC721(address(piNft)).safeTransferFrom(
-            address(this),
-            owner, //send it to the owner of TNFT
-            tnftToPassiveNft[caller][tokenId]
-        );
-        PassiveIncomeNFT.Lock memory lock = piNft.locks(
-            tnftToPassiveNft[caller][tokenId]
-        );
-        _updateRevenueShare(
-            address(this),
-            tokenId,
-            -int256(lock.lockedAmount + lock.maxPayout)
-        );
-        _updateRevenueShare(
-            address(piNft),
-            tnftToPassiveNft[caller][tokenId],
-            int256(lock.lockedAmount + lock.maxPayout)
-        );
+
+        // Transfer piNft from this contract to the TNFT owner.
+        IERC721(address(piNft)).safeTransferFrom(address(this), owner, tnftToPassiveNft[caller][tokenId]);
+
+        // Fetch lock data for this lock instance.
+        PassiveIncomeNFT.Lock memory lock = piNft.locks(tnftToPassiveNft[caller][tokenId]);
+        
+        // Update rev share eligibility amount for this contract.
+        _updateRevenueShare(address(this), tokenId, -int256(lock.lockedAmount + lock.maxPayout));
+
+        // Update rev share eligibility amount for the piNft contract.
+        _updateRevenueShare(address(piNft), tnftToPassiveNft[caller][tokenId], int256(lock.lockedAmount + lock.maxPayout));
 
         piNft.setGenerateRevenue(tnftToPassiveNft[caller][tokenId], true);
         delete tnftToPassiveNft[caller][tokenId];
@@ -147,7 +146,7 @@ contract PassiveManager is AdminAccess, IPassiveManager {
     /// @notice Internal function to update revShare on the revenue share contract.
     /// @param contractAddress contract address.
     /// @param tokenId token identifier.
-    /// @param value TODO
+    /// @param value amount rev share.
     function _updateRevenueShare(address contractAddress, uint256 tokenId, int256 value) internal {
         IFactory(factory).revenueShare().updateShare(contractAddress, tokenId, value);
     }

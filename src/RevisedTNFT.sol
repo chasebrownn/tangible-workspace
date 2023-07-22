@@ -374,7 +374,7 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         //this should execute only once
         // TODO: Look into
         // if (passiveManager.tnftToPassiveNft(address(this), tokenId) != 0 && !inOurCustody) {
-        //    passiveManager.deletePassiveNft(tokenId, owners[tokenId][0]);
+        //    passiveManager.movePassiveNftToOwner(tokenId, owners[tokenId][0]);
         // }
     }
 

@@ -9,7 +9,7 @@ interface IPassiveManager {
 
     function tnftToPassiveNft(address _contract, uint256 tokenId) external returns (uint256 passiveTokenId);
 
-    function deletePassiveNft(uint256 tokenId, address owner) external;
+    function movePassiveNftToOwner(uint256 tokenId, address owner) external;
 
     function registerWithPassiveManager(address _contract, bool eligible) external;
 
