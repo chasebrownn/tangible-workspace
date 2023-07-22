@@ -2,32 +2,46 @@
 pragma solidity ^0.8.7;
 
 import { AdminAccess } from "./abstract/AdminAccess.sol";
-import { IFactory } from "./interfaces/IFactory.sol";
-
-//import { IERC1155 } from "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
+import { IFactory, RevenueShare } from "./interfaces/IFactory.sol";
+import { AccessControl } from  "./abstract/AdminAccess.sol";
+import { IRentManager } from "./IRentManager.sol";
 
 /// @notice RevShareManager is in charge of facilitating the revenue share allocation to Real Estate TNFT holders.
-contract RentManager is AdminAccess {
+contract RentManager is IRentManager, AdminAccess {
 
     // ~ State Variabls ~
 
+    /// @notice Bytes hash for the Share Manager role.
+    bytes32 public constant SHARE_MANAGER_ROLE = keccak256("SHARE_MANAGER");
+
+    /// @notice Bytes hash for the Claimer role.
+    bytes32 public constant CLAIMER_ROLE = keccak256("CLAIMER");
+
+    /// @notice A mapping from TNFT contract address to bool. If true, contract may reference the RentManager.
+    mapping(address => bool) public override registered;
+
+    /// @notice A mapping from TNFT contract to tokenId to contract address of the RevShare contract.
+    mapping(address => mapping(uint256 => address)) public override rentRevenueShare;
+
+    /// @notice Used to store the contract address of Factory.sol.
     address public immutable factory;
 
 
     // ~ Constructor ~
 
     /// @notice Initialize contract
+    /// @param _factory address of Factory contract.
     constructor(
         address _factory
     ) {
         _grantRole(FACTORY_ROLE, _factory);
-
         factory = _factory;
     }
 
 
     // ~ Modifiers ~
 
+    /// @notice Modifier for verifying msg.sender to be the Factory admin.
     modifier onlyFactoryAdmin() {
         require(IFactory(factory).isFactoryAdmin(msg.sender), "NFA");
         _;
@@ -36,12 +50,48 @@ contract RentManager is AdminAccess {
 
     // ~ External Functions ~
 
-    //
+    /// @notice This function sets a contract to bool value in registered mapping.
+    /// @dev Should be called after TNFT contract is deployed if rent income is required. Callable by Factory.
+    /// @param _contract TNFT contract address that should be registered.
+    /// @param _eligible If true, needs to be registered and eligible for rent rev share.
+    function registerWithRentManager(address _contract, bool _eligible) external override onlyFactory {
+        registered[_contract] = _eligible;
+    }
+
+    /// @notice This function is called when a new TNFT rent rev share receiver is created.
+    /// @param tokenId token identifier.
+    function createRentRevShareToken(uint256 tokenId) override external {
+        require(registered[msg.sender], "RentManager.sol::something() contract provided is not registered");
+
+        // Fetch RevShare instance for this contract.
+        RevenueShare rentRevenueShare_ = IFactory(factory).rentShare().forToken(address(this), tokenId);
+
+        // Assign the RevShare contract address to rentRevenueShare mapping.
+        rentRevenueShare[msg.sender][tokenId] = address(rentRevenueShare_);
+
+        // NOTE: It may not be necessary to grant these roles EVERY time a new token is minted.
+        //       The role can probably be granted when the contract is registered with the rentManager.
+
+        // Grant the SHARE_MANAGER_ROLE to msg.sender. Granted by RevShare contract.
+        _roleGranter(address(rentRevenueShare_), msg.sender, SHARE_MANAGER_ROLE);
+
+        // Grant the CLAIMER_ROLE to msg.sender. Granted by RevShare contract.
+        _roleGranter(address(rentRevenueShare_), msg.sender, CLAIMER_ROLE);
+
+        // Update share state on RevShare contract.
+        rentRevenueShare_.updateShare(address(this), tokenId, 1e18);
+    }
 
 
     // ~ Internal Functions ~
 
-    //
+    /// @notice Is used to grant special roles via the AccessControl contract.
+    /// @param granter contract that is granting this role.
+    /// @param to recipient of the role.
+    /// @param roleToGrant bytes hash of new role being assigned.
+    function _roleGranter(address granter, address to, bytes32 roleToGrant) internal {
+        AccessControl(granter).grantRole(roleToGrant, to);
+    }
 
 
     // ~ View Functions ~

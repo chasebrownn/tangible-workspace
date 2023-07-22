@@ -7,6 +7,7 @@ import { IOwnable } from "./interfaces/IOwnable.sol";
 import { AdminAccess, AccessControl } from  "./abstract/AdminAccess.sol";
 import { IStorageManager } from "./IStorageManager.sol";
 import { IPassiveManager } from "./IPassiveManager.sol";
+import { IRentManager } from "./IRentManager.sol";
 
 import { ERC1155 } from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import { IERC1155Receiver, IERC165 } from "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
@@ -49,11 +50,18 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
     ///         If true, will need to be registered with the storageManager contract.
     bool public storageRequired;
 
+    /// @notice Used to assign whether or not this contract's tokens receive rent income.
+    ///         If true, will need to be registered with the rentManager contract.
+    bool public rentRecipient;
+
     /// @notice Used to store the address and IStorageManager instance of the designated storageManager.
     IStorageManager public storageManager;
 
     /// @notice Used to store the address and IPassiveManager instance of the designated IPassiveManager.
     IPassiveManager public passiveManager;
+
+    /// @notice Used to store the address of the RentManager contract.
+    IRentManager public rentManager;
 
     /// @notice Array for storing fingerprint identifiers.
     uint256[] public fingeprintsInTnft;
@@ -83,6 +91,8 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
     /// @param _storageManager address of StorageManager contract.
     /// @param _storageRequired boolean of whether a storage manager is required for this contract.
     /// @param _passiveManager address of PassiveManager contract.
+    /// @param _rentRecipient If true, this contract needs to register with a RentManager.
+    /// @param _rentManager address of RentManager contract. Not needed if _rentRecipient is false.
     constructor(
         address _factory,
         string memory _category,
@@ -90,7 +100,9 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         string memory _uri,
         address _storageManager,
         bool _storageRequired,
-        address _passiveManager
+        address _passiveManager,
+        bool _rentRecipient,
+        address _rentManager
     ) ERC1155(_uri) {
 
         _grantRole(FACTORY_ROLE, _factory);
@@ -102,6 +114,8 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         storageManager = IStorageManager(_storageManager);
         storageRequired = _storageRequired;
         passiveManager = IPassiveManager(_passiveManager);
+        rentRecipient = _rentRecipient;
+        rentManager = IRentManager(_rentManager);
     }
 
 
@@ -296,27 +310,10 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         uint256 tokenToMint = ++lastTokenId;
 
         _mint(toStock, tokenToMint, MAX_BALANCE, abi.encodePacked(fingerprint));
-        // TODO:
-        // if (paysRent) {
-        //     RevenueShare rentRevenueShare_ = IFactory(factory)
-        //         .rentShare()
-        //         .forToken(address(this), tokenToMint);
-        //     rentRevenueShare[tokenToMint] = address(rentRevenueShare_);
 
-        //     _roleGranter(
-        //         address(rentRevenueShare_),
-        //         address(this),
-        //         SHARE_MANAGER_ROLE
-        //     );
-
-        //     _roleGranter(
-        //         address(rentRevenueShare_),
-        //         address(this),
-        //         CLAIMER_ROLE
-        //     );
-
-        //     rentRevenueShare_.updateShare(address(this), tokenToMint, 1e18);
-        // }
+        if (rentRecipient) {
+            rentManager.createRentRevShareToken(tokenToMint);
+        }
 
         tokensFingerprint[tokenToMint] = fingerprint;
         tnftCustody[tokenToMint] = true;

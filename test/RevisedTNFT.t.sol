@@ -54,7 +54,9 @@ contract RevisedTNFTTest is Test {
             BASE_URI,
             address(storageManager),
             true,
-            address(2) //TODO: update
+            address(2), //TODO: update -> passiveManager
+            true,
+            address(3) // TODO: update -> rentManager
         );
 
         vm.prank(address(factory));
