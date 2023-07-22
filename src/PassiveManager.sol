@@ -57,35 +57,55 @@ contract PassiveManager is AdminAccess, IPassiveManager {
         registered[_contract] = _eligibleForPassive;
     }
 
-    // TODO: TEST
+    /// TODO: Figure out if the TNFT token is mandatory to lock TNGBL tokens. No current check for ownership which is odd.
+    /// @notice This function allows for locking of TNBGL tokens for a passiveIncome NFT.
+    /// @dev Only callable by Factory.
+    /// @param _contract TNGBL contract address.
+    /// @param tokenId tokenId allowing you to lock your TNGBL tokens.
+    /// @param _years amount of time to lock TNGBL tokens. Will be multiplied by 12 months.
+    /// @param lockedAmount Amount of TNGBL to lock.
+    /// @param onlyLock If true, TNGBL will lock with no rewards. If false, owner will be eligible for rewards.
     function lockTNGBL(address _contract, uint256 tokenId, uint256 _years, uint256 lockedAmount, bool onlyLock) external override onlyFactory {
         require(registered[_contract], "PassiveManager.sol::lockTNGBL() contract provided is not registered");
-        //approve immediatelly spending of TNGBL token in favor of
-        //passive incomeNFT contract
+
+        // Grab piNft address from Factory.
         PassiveIncomeNFT piNft = IFactory(factory).passiveNft();
-        IFactory(factory).TNGBL().approve(address(piNft), lockedAmount); // approve spend 
-        //handle passive income minting
+
+        // Approve spend of TNGBL from PassiveManager to wherever piNft specifies when calling transferFrom()
+        IFactory(factory).TNGBL().approve(address(piNft), lockedAmount);
+
+        // toLock -> time to lock TNGBL in months.
         uint8 toLock = uint8(12 * _years);
         if (toLock > piNft.maxLockDuration()) {
             toLock = piNft.maxLockDuration();
         }
-        uint256 passiveTokenId = piNft.mint(_contract, lockedAmount, toLock, onlyLock, false); // mint passive nft given lock time and amount of $TNGBL
-        tnftToPassiveNft[_contract][tokenId] = passiveTokenId; // set passive nft tokenId in mapping
 
-        PassiveIncomeNFT.Lock memory lock = piNft.locks(tnftToPassiveNft[_contract][tokenId]); 
+        // mint passive nft and update lock data on the piNft contract. Nft will mint directly to the TNFT contract.
+        uint256 passiveTokenId = piNft.mint(_contract, lockedAmount, toLock, onlyLock, false);
+        tnftToPassiveNft[_contract][tokenId] = passiveTokenId;
+
+        // Fetch lock data for this lock instance.
+        PassiveIncomeNFT.Lock memory lock = piNft.locks(tnftToPassiveNft[_contract][tokenId]);
         _updateRevenueShare(_contract, tokenId, int256(lock.lockedAmount + lock.maxPayout));
     }
 
-    // TODO: TEST
+    // 
     function claim(address _contract, uint256 tokenId, uint256 amount) external override {
         require(IERC1155(_contract).balanceOf(msg.sender, tokenId) > 0, "PassiveManager.sol::lockTNGBL() insufficient balance");
 
+        // Grab piNft address from Factory.
         PassiveIncomeNFT piNft = IFactory(factory).passiveNft();
+
+        // Use piNft.claimableIncome() to fetch the amount that the user is eligible for in terms of passive income, if any at all.
         (uint256 free, ) = piNft.claimableIncome(tnftToPassiveNft[_contract][tokenId]);
 
+        // Use piNft.claim() to initiate a transfer of tokens from piNft to address(this).
         piNft.claim(tnftToPassiveNft[_contract][tokenId], amount);
+
+        // Address(this) now transfers TNGBL from this contract to the msg.sender.
         IFactory(factory).TNGBL().safeTransfer(msg.sender, amount);
 
+        // NOTE: ????
         if (amount > free) {
             PassiveIncomeNFT.Lock memory lock = piNft.locks(tnftToPassiveNft[_contract][tokenId]);
             _updateRevenueShare(_contract, tokenId, int256(lock.lockedAmount + lock.maxPayout));

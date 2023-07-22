@@ -57,8 +57,10 @@ contract RevisedTNFTTest is Test {
             address(2) //TODO: update
         );
 
-        vm.startPrank(FACTORY_OWNER);
+        vm.prank(address(factory));
         storageManager.registerWithStorageManager(address(tNftContract), true);
+
+        vm.startPrank(FACTORY_OWNER);
         storageManager.toggleStorageFee(address(tNftContract), true);
         storageManager.setStoragePricePerYear(address(tNftContract), 12_000_000); // $12/yr in USDC
         vm.stopPrank();
