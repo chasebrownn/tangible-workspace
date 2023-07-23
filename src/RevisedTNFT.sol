@@ -31,28 +31,28 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
     mapping(uint256 => uint256) public override tokensFingerprint;
 
     /// @notice A mapping from tokenId to bool. If tokenId is set to true, it is in the custody of Tangible.
-    mapping(uint256 => bool) public tnftCustody;
+    mapping(uint256 => bool) public override tnftCustody;
 
     /// @notice A mapping of tokenId to array of owners. In the event a
     ///         tokenId has more than one owner, this will be useful.
     mapping(uint256 => address[]) public owners;
 
     /// @notice Used to assign a unique tokenId identifier to each token minted.
-    uint256 public lastTokenId = 0;
+    uint256 public override lastTokenId = 0;
 
     /// @notice The max balance of each tokenId.
     uint256 constant public MAX_BALANCE = 100;
 
     /// @notice Used to store the contract address of Factory.sol.
-    address public factory;
+    address public override factory;
     
     /// @notice Used to assign whether or not this contract's tokens require storage.
     ///         If true, will need to be registered with the storageManager contract.
-    bool public storageRequired;
+    bool public override storageRequired;
 
     /// @notice Used to assign whether or not this contract's tokens receive rent income.
     ///         If true, will need to be registered with the rentManager contract.
-    bool public rentRecipient;
+    bool public override rentRecipient;
 
     /// @notice Used to store the address and IStorageManager instance of the designated storageManager.
     IStorageManager public storageManager;
@@ -71,10 +71,10 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
 
     /// @notice Used to assign this contract with a custom category of products this
     ///         contract will be in charge of minting/stocking.
-    string public category;
+    string public override category;
 
     /// @notice Used to assign this contract with a custom symbol identifier.
-    string public symbol;
+    string public override symbol;
 
     /// @notice Used to assign a base metadata HTTP URI for appending/fetching token metadata.
     string private baseUri;
@@ -127,6 +127,13 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         _;
     }
 
+    struct HelperStruct {
+        uint256 totalShareSum;
+        uint256 totalClaimedSum;
+        uint256 revenueShare_;
+        uint256 rentShare_;
+    }
+
 
     // ~ External Functions ~
 
@@ -144,6 +151,8 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         if (balanceOf(to, id) == 0 && amount > 0) {
             owners[id].push(to);
         }
+        _autoClaim(id);
+
         super._safeTransferFrom(from, to, id, amount, data);
         if (balanceOf(from, id) == 0) {
             _removeFromOwners(id, from);
@@ -163,6 +172,7 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
             if (balanceOf(to, ids[i]) == 0 && amounts[i] > 0) {
                 owners[ids[i]].push(to);
             }
+            _autoClaim(ids[i]);
             unchecked {
                 ++i;
             }
@@ -209,7 +219,7 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
     /// @notice External function for setting custody status of a tokenId.
     /// @param tokenIds array of tokenIds to change status.
     /// @param inOurCustody array of corresponding status of each tokenId.
-    function setCustodyStatuses(uint256[] calldata tokenIds, bool[] calldata inOurCustody) external onlyFactory {
+    function setCustodyStatuses(uint256[] calldata tokenIds, bool[] calldata inOurCustody) external override onlyFactory {
         uint256 length = tokenIds.length;
         for (uint256 i; i < length;) {
             _setCustodyStatus(tokenIds[i], inOurCustody[i]);
@@ -245,14 +255,14 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
     /// @notice This function is used to update the baseUri state variable.
     /// @dev Only callable by factory admin.
     /// @param _uri New base URI.
-    function setBaseURI(string memory _uri) external onlyFactoryAdmin {
+    function setBaseUri(string memory _uri) external override onlyFactoryAdmin {
         _setURI(_uri);
     }
 
     /// @notice This function is used to update the factory state variable.
     /// @dev Only callable by Factory admin.
     /// @param _factory New address of factory.
-    function setFactory(address _factory) external onlyFactoryAdmin {
+    function setFactory(address _factory) external override onlyFactoryAdmin {
         factory = _factory;
     }
 
@@ -260,7 +270,7 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
     /// @dev Only callable by Factory admin.
     /// @param fingerprints array of fingerprints to add.
     /// @param ids array of new productIds to add.
-    function addFingerprintsIds(uint256[] calldata fingerprints, string[] calldata ids) external onlyFactoryAdmin {
+    function addFingerprintsIds(uint256[] calldata fingerprints, string[] calldata ids) external override onlyFactoryAdmin {
         uint256 lengthArray = fingerprints.length;
 
         require(lengthArray == ids.length, "no match");
@@ -284,14 +294,14 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
     ///      Function only callable by Factory admin.
     /// @param tokenId to be blacklisted.
     /// @param blacklisted if true, tokenId will be blacklisted.
-    function blacklistToken(uint256 tokenId, bool blacklisted) external onlyFactoryAdmin {
+    function blacklistToken(uint256 tokenId, bool blacklisted) external override onlyFactoryAdmin {
         isBlacklisted[tokenId] = blacklisted;
     }
 
     /// @notice Allows the factory admin to burn 1 or more tokens
     /// @dev msg.sender must be factory admin AND holding entire ownership balance
     /// @param tokenId tokenId to burn.
-    function burn(uint256 tokenId) external onlyFactoryAdmin {
+    function burn(uint256 tokenId) external override onlyFactoryAdmin {
         address msgSender = msg.sender;
         require(balanceOf(msgSender, tokenId) == MAX_BALANCE);
         _removeFromOwners(tokenId, msgSender);
@@ -312,7 +322,10 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         _mint(toStock, tokenToMint, MAX_BALANCE, abi.encodePacked(fingerprint));
 
         if (rentRecipient) {
-            rentManager.createRentRevShareToken(tokenToMint);
+            // TODO: Uncomment during integration testing
+            /// @dev Will result in revert due to incomplete independancy implementation with rentRevShare contracts.
+            ///      -> https://polygonscan.com/address/0x527a819db1eb0e34426297b03bae11f2f8b3a19e#code
+            // rentManager.createRentRevShareToken(tokenToMint);
         }
 
         tokensFingerprint[tokenToMint] = fingerprint;
@@ -321,6 +334,20 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
 
         emit ProducedTNFT(tokenToMint);
         return tokenToMint;
+    }
+
+    /// @notice This internal function claims rewards for rent recipients or passive income recipients.
+    /// @dev Is mainly called during a transfer of tokens or shares from one owner to another.
+    /// @param tokenId token identifier.
+    function _autoClaim(uint256 tokenId) internal {
+        if (passiveManager.tnftToPassiveNft(address(this), tokenId) > 0) {
+            passiveManager.claimForTokenExternal(address(this), tokenId);
+        }
+        if (rentRecipient) {
+            // TODO: Uncomment during integration
+            /// @dev Will result in revert -> rentManager calls rentShare contract which currently doesnt exist.
+            //rentManager.claimForTokenExternal(address(this), tokenId);
+        }
     }
 
     /// @notice Internal function for updating the baseUri global variable.
@@ -335,7 +362,7 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
     /// @param to the destination of the token.
     /// @param ids tokenId(s) to transfer.
     /// @param amounts balance of each tokenId to transfer. Cannot exceed balanceOf(id, from).
-    /// @param data salt.
+    /// @param data salt for event filtering.
     function _beforeTokenTransfer(address operator, address from, address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data) internal override(ERC1155) {
         super._beforeTokenTransfer(operator, from, to, ids, amounts, data);
         // Allow operations if admin, factory or 0 address
@@ -369,10 +396,10 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
         tnftCustody[tokenId] = inOurCustody;
 
         //this should execute only once
-        // TODO: Look into
-        // if (passiveManager.tnftToPassiveNft(address(this), tokenId) != 0 && !inOurCustody) {
-        //    passiveManager.movePassiveNftToOwner(tokenId, owners[tokenId][0]);
-        // }
+        // TODO: Test during integration
+        if (passiveManager.tnftToPassiveNft(address(this), tokenId) != 0 && !inOurCustody) {
+           passiveManager.movePassiveNftToOwner(tokenId, owners[tokenId][0]);
+        }
     }
 
     /// @notice Internal function for removing an owner from the owners array for a specified tokenId.
@@ -431,6 +458,14 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
     /// @return An array of owner addresses for specified tokenId.
     function getOwners(uint256 tokenId) external view returns (address[] memory) {
         return owners[tokenId];
+    }
+
+    /// @notice View function for fetching the MAX_BALANCE var.
+    /// @dev Usually you'd just include this public var in the interface, but constants cannot be declared in an interface.
+    ///      So, we create a view function which CAN be declared on the interface
+    /// @return The MAX_BALANCE constant returned as uint256.
+    function getMaxBal() external view override returns (uint256) {
+        return MAX_BALANCE;
     }
 
 }

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.7;
 
 import { AdminAccess } from "./abstract/AdminAccess.sol";
-import { IFactory, RevenueShare } from "./interfaces/IFactory.sol";
+import { IFactory, RevenueShare, RentShare } from "./interfaces/IFactory.sol";
 import { AccessControl } from  "./abstract/AdminAccess.sol";
 import { IRentManager } from "./IRentManager.sol";
 
@@ -26,16 +26,22 @@ contract RentManager is IRentManager, AdminAccess {
     /// @notice Used to store the contract address of Factory.sol.
     address public immutable factory;
 
+    /// @notice Used to store the address of rentShareContract.
+    RevenueShare public immutable rentShareContract;
+
 
     // ~ Constructor ~
 
     /// @notice Initialize contract
     /// @param _factory address of Factory contract.
     constructor(
-        address _factory
+        address _factory,
+        address _rentShare
     ) {
         _grantRole(FACTORY_ROLE, _factory);
         factory = _factory;
+
+        rentShareContract = RevenueShare(_rentShare);
     }
 
 
@@ -64,7 +70,7 @@ contract RentManager is IRentManager, AdminAccess {
         require(registered[msg.sender], "RentManager.sol::something() contract provided is not registered");
 
         // Fetch RevShare instance for this contract.
-        RevenueShare rentRevenueShare_ = IFactory(factory).rentShare().forToken(address(this), tokenId);
+        RevenueShare rentRevenueShare_ = IFactory(factory).rentShare().forToken(msg.sender, tokenId);
 
         // Assign the RevShare contract address to rentRevenueShare mapping.
         rentRevenueShare[msg.sender][tokenId] = address(rentRevenueShare_);
@@ -80,6 +86,14 @@ contract RentManager is IRentManager, AdminAccess {
 
         // Update share state on RevShare contract.
         rentRevenueShare_.updateShare(address(this), tokenId, 1e18);
+    }
+
+    /// @notice This function is called to claim rent rewards.
+    /// @param _contract TNFT contract address.
+    /// @param tokenId token identifier.
+    function claimForTokenExternal(address _contract, uint256 tokenId) external {
+        require(registered[_contract], "RentManager.sol::claimForTokenExternal() contract provided is not registered");
+        rentShareContract.claimForToken(_contract, tokenId);
     }
 
 

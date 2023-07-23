@@ -16,4 +16,6 @@ interface IPassiveManager {
     function lockTNGBL(address _contract, uint256 tokenId, uint256 _years, uint256 lockedAmount, bool onlyLock) external;
 
     function claim(address _contract, uint256 tokenId, uint256 amount) external;
+
+    function claimForTokenExternal(address _contract, uint256 tokenId) external;
 }

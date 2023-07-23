@@ -3,22 +3,30 @@ pragma solidity ^0.8.13;
 
 import "../lib/forge-std/src/Test.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
 
 import { RevisedTangibleNFT } from "../src/RevisedTNFT.sol";
 import { StorageManager } from "../src/StorageManager.sol";
+import { PassiveManager } from "../src/PassiveManager.sol";
+import { RentManager } from "../src/RentManager.sol";
 import { Factory } from "../src/protocol/Factory.sol";
 
+import { TangibleRentShare } from "../src/xImported/TangibleRentShare/TangibleRentShare.sol";
 
 // TODO: Test querying fraction ownership old vs new approach
 // Showcase main differences
 // Showcase new revisions that would need to happen to support this
 //  If factory were to deploy this new contract
 
-
 contract RevisedTNFTTest is Test {
     RevisedTangibleNFT public tNftContract;
     Factory public factory;
     StorageManager public storageManager;
+    PassiveManager public passiveManager;
+    RentManager public rentManager;
+
+    // Factory Dependancies
+    TangibleRentShare public rentShare;
 
     // Global constants
     address public constant USDC = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
@@ -26,6 +34,9 @@ contract RevisedTNFTTest is Test {
     address public constant PRICE_MANAGER = address(bytes20(bytes("Price Manager")));
     address public constant FACTORY_OWNER = address(bytes20(bytes("Factory Owner")));
     string public constant BASE_URI = "https://example.gateway.com/ipfs/CID";
+
+    // Access hash for AccessControl dependancy
+    bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
     // Actors
     address public constant JOE = address(bytes20(bytes("Joe")));
@@ -41,9 +52,26 @@ contract RevisedTNFTTest is Test {
             FACTORY_OWNER
         );
 
+        // Deploy TangibleRentShare
+        rentShare = new TangibleRentShare(
+            USDC,
+            address(0x527a819db1eb0e34426297b03bae11F2f8B3A19E) // task manager
+        );
+
         // Deploy StorageManager
         storageManager = new StorageManager(
             address(factory)
+        );
+
+        // Deploy PassiveManager
+        passiveManager = new PassiveManager(
+            address(factory)
+        );
+
+        // Deploy RentManager
+        rentManager = new RentManager(
+            address(factory),
+            address(5) // TODO: Update -> RevenueShare contract.
         );
 
         // Deploy RevisedTangibleNFT
@@ -54,13 +82,23 @@ contract RevisedTNFTTest is Test {
             BASE_URI,
             address(storageManager),
             true,
-            address(2), //TODO: update -> passiveManager
+            address(passiveManager),
             true,
-            address(3) // TODO: update -> rentManager
+            address(rentManager)
         );
 
-        vm.prank(address(factory));
+        rentShare.grantRole(DEFAULT_ADMIN_ROLE, address(rentManager));
+
+        // set contracts on Factory.
+        vm.startPrank(FACTORY_OWNER);
+        factory.setContract(Factory.FACT_ADDRESSES.RENT_SHARE, address(rentShare));
+        vm.stopPrank();
+
+        vm.startPrank(address(factory));
         storageManager.registerWithStorageManager(address(tNftContract), true);
+        rentManager.registerWithRentManager(address(tNftContract), true);
+        passiveManager.registerWithPassiveManager(address(tNftContract), true);
+        vm.stopPrank();
 
         vm.startPrank(FACTORY_OWNER);
         storageManager.toggleStorageFee(address(tNftContract), true);
@@ -134,10 +172,12 @@ contract RevisedTNFTTest is Test {
         assertEq(tNftContract.uri(1), "https://example.gateway.com/ipfs/CID/1.json");
         assertEq(tNftContract.lastTokenId(), 0);
         assertEq(storageManager.registered(address(tNftContract)), true);
+
+        
     }
 
 
-    // ~ RevisedTangibleNFT Unit Tests ~
+    // ~ RevisedTangibleNFT Basic Unit Tests ~
 
     /// @notice This test verifies the functionality of safeTransferFrom.
     function test_tangible_revisedTNFT_safeTransferFrom() public {
@@ -269,6 +309,7 @@ contract RevisedTNFTTest is Test {
 
     // ~ StorageManager Unit Tests ~
 
+    /// @notice This method tests the adustStorageAndGetAmount on the StorageManager.
     function test_tangible_storageManager_adjustStorageAndGetAmount() public {
         // set up new fingerprint to mint
         _initializeFingerprint();

@@ -2,8 +2,9 @@
 pragma solidity ^0.8.7;
 
 import { AdminAccess } from "./abstract/AdminAccess.sol";
-import { IFactory, PassiveIncomeNFT } from "./interfaces/IFactory.sol";
+import { IFactory, PassiveIncomeNFT, RevenueShare } from "./interfaces/IFactory.sol";
 import { IPassiveManager } from "./IPassiveManager.sol";
+import { IRevisedTNFT } from "./IRevisedTNFT.sol";
 
 import { IERC1155 } from "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
@@ -22,8 +23,14 @@ contract PassiveManager is AdminAccess, IPassiveManager {
     /// @notice A mapping from TNFT contract address to tokenId to passiveTokenId.
     mapping(address => mapping(uint256 => uint256)) public tnftToPassiveNft;
 
+    /// @notice A mapping from TNFT contract address to tokenId to amount rewards claimed.
+    mapping(address => mapping(uint256 => uint256)) public passiveClaimed;
+
     /// @notice Used to store the contract address of Factory.sol.
     address public immutable factory;
+
+    /// @notice Used to store the address of revenueShareContract.
+    RevenueShare public immutable revenueShareContract;
 
 
     // ~ Constructor ~
@@ -35,6 +42,8 @@ contract PassiveManager is AdminAccess, IPassiveManager {
     ) {
         _grantRole(FACTORY_ROLE, _factory);
         factory = _factory;
+
+        revenueShareContract = IFactory(_factory).revenueShare();
     }
 
 
@@ -93,7 +102,8 @@ contract PassiveManager is AdminAccess, IPassiveManager {
     /// @param tokenId token identifier.
     /// @param amount amount of rewards to claim.
     function claim(address _contract, uint256 tokenId, uint256 amount) external override {
-        require(IERC1155(_contract).balanceOf(msg.sender, tokenId) > 0, "PassiveManager.sol::lockTNGBL() insufficient balance");
+        uint256 share = IRevisedTNFT(_contract).balanceOf(msg.sender, tokenId);
+        require(share > 0, "PassiveManager.sol::lockTNGBL() insufficient balance");
 
         // Grab piNft address from Factory.
         PassiveIncomeNFT piNft = IFactory(factory).passiveNft();
@@ -104,12 +114,20 @@ contract PassiveManager is AdminAccess, IPassiveManager {
         // Use piNft.claim() to initiate a transfer of tokens from piNft to address(this).
         piNft.claim(tnftToPassiveNft[_contract][tokenId], amount);
 
+        // Fetch lock instance for this tokenId and calculate total rewards claimable.
+        PassiveIncomeNFT.Lock memory lock = piNft.locks(tnftToPassiveNft[_contract][tokenId]);
+        uint256 totalClaimable = free + lock.claimed;
+
+        // Calculate amount in event ownership is shared
+        uint256 fractionalClaimable = (totalClaimable * share) / IRevisedTNFT(_contract).getMaxBal();
+        amount = fractionalClaimable - passiveClaimed[_contract][tokenId];
+
         // Address(this) now transfers TNGBL from this contract to the msg.sender.
         IFactory(factory).TNGBL().safeTransfer(msg.sender, amount);
+        passiveClaimed[_contract][tokenId] += amount;
 
         // If amount > free, the base rev share is penalized so we update the Factory rev share state.
         if (amount > free) {
-            PassiveIncomeNFT.Lock memory lock = piNft.locks(tnftToPassiveNft[_contract][tokenId]);
             _updateRevenueShare(_contract, tokenId, int256(lock.lockedAmount + lock.maxPayout));
         }
     }
@@ -138,6 +156,14 @@ contract PassiveManager is AdminAccess, IPassiveManager {
 
         piNft.setGenerateRevenue(tnftToPassiveNft[caller][tokenId], true);
         delete tnftToPassiveNft[caller][tokenId];
+    }
+
+    /// @notice This function is called to claim passive rewards.
+    /// @param _contract TNFT contract address.
+    /// @param tokenId token identifier.
+    function claimForTokenExternal(address _contract, uint256 tokenId) external {
+        require(registered[_contract], "PassiveManager.sol::claimForTokenExternal() caller is not registered");
+        revenueShareContract.claimForToken(_contract, tokenId);
     }
 
 

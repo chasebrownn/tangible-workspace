@@ -12,4 +12,6 @@ interface IRentManager {
     function createRentRevShareToken(uint256 tokenId) external;
 
     function registerWithRentManager(address _contract, bool eligible) external;
+
+    function claimForTokenExternal(address _contract, uint256 tokenId) external;
 }
