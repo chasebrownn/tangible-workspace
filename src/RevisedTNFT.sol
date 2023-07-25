@@ -20,6 +20,8 @@ contract RevisedTangibleNFT is AdminAccess, ERC1155, IRevisedTNFT {
 
     // ~ State Variabls ~
 
+    // 434 bytes -> 16 slots
+
     /// @notice A mapping from tokenId to bool. If a tokenId is set to true.
     ///         It can no longer be transferred unless to/from an admin.
     mapping(uint256 => bool) public override isBlacklisted;
